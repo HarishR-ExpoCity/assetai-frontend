@@ -111,7 +111,7 @@ export default function ChatWindow({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  const { accessToken, getAccessToken, idToken } = useAccessToken();
+  const { isAuthenticated } = useAccessToken();
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -188,11 +188,6 @@ export default function ChatWindow({
     setSessionId(uuidv4());
   }, []);
 
-  useEffect(() => {
-    if (accessToken == null) {
-      getAccessToken();
-    }
-  }, [accessToken, getAccessToken]);
 
   useEffect(() => {
     const fetchChatHistory = async () => {
@@ -205,23 +200,18 @@ export default function ChatWindow({
       setLoading(true);
 
       console.log(`Fetching chat history for session ID: ${selectedSessionId}`);
-      if (accessToken !== null) {
+      if (isAuthenticated) {
         try {
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/history/${selectedSessionId}`,
             {
               headers: {
                 accept: 'application/json',
-                Authorization: `Bearer ${idToken}`,
-                Authorization2: `${accessToken}`,
               },
             }
           );
           const data = await response.json();
           if (response.status == 400) {
-            return { error: data.detail };
-          } else if (response.status == 401) {
-            await getAccessToken(); // Attempt to refresh the token
             return { error: data.detail };
           } else if (!response.ok) {
             return { error: data.detail };
@@ -481,7 +471,7 @@ export default function ChatWindow({
 
     fetchChatHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSessionId, accessToken]);
+  }, [selectedSessionId, isAuthenticated]);
 
   const handleSendMessage = async (
     messageContent: string,
@@ -523,12 +513,10 @@ export default function ChatWindow({
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
-      if (accessToken !== null) {
+      if (isAuthenticated) {
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${idToken}`,
-            Authorization2: `${accessToken}`,
             'Content-Type': 'application/json',
             Accept: 'application/json',
           },
@@ -538,10 +526,6 @@ export default function ChatWindow({
 
         if (response.status == 400) {
           return { error: 'Bad request' };
-        } else if (response.status == 401) {
-          console.log('response status 401');
-          await getAccessToken(); // Attempt to refresh the token
-          return { error: 'Token expired' };
         } else if (!response.ok) throw new Error('Failed to fetch stream');
         else if (response.ok) {
           try {
@@ -884,14 +868,12 @@ export default function ChatWindow({
     const apiUrl = isFavorite
       ? `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/${chatId}/unfavorite`
       : `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/${chatId}/favorite`;
-    if (accessToken !== null) {
+    if (isAuthenticated) {
       try {
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             accept: 'application/json',
-            Authorization: `Bearer ${idToken}`,
-            Authorization2: `${accessToken}`,
           },
         });
         if (response.ok) {
@@ -906,9 +888,6 @@ export default function ChatWindow({
           onFavoriteStatusChange();
         } else if (response.status === 400) {
           return { error: 'Bad request' };
-        } else if (response.status === 401) {
-          await getAccessToken(); // Attempt to refresh the token
-          return { error: 'Token expired' };
         } else if (!response.ok) {
           throw new Error(
             `Error fetching favorite chats: ${response.statusText}`

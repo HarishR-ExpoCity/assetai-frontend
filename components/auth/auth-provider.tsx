@@ -1,38 +1,63 @@
-"use client";
+'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
-import { MsalProvider } from "@azure/msal-react";
-import { msalInstance } from "./auth";
-import { AuthSkeleton } from "./AuthSkeleton";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { AuthState, getStoredAuth, setStoredAuth, clearStoredAuth, validateCredentials } from './auth';
+
+interface AuthContextType extends AuthState {
+  login: (username: string, password: string) => boolean;
+  logout: () => void;
+  isLoading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export default function AuthProvider({ children }: AuthProviderProps) {
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [authState, setAuthState] = useState<AuthState>({
+    isAuthenticated: false,
+    user: null,
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const initializeMsal = async () => {
-      try {
-        console.log('Initializing MSAL...');
-        await msalInstance.initialize();
-        console.log('MSAL initialization complete!');
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('MSAL initialization failed:', error);
-        // Even on failure, we should set initialized to true to prevent being stuck
-        setIsInitialized(true);
-      }
-    };
-
-    initializeMsal();
+    // Check for existing session on mount
+    const stored = getStoredAuth();
+    setAuthState(stored);
+    setIsLoading(false);
   }, []);
 
-  if (!isInitialized) {
-    // Use the AuthSkeleton component for consistent loading experience
-    return <AuthSkeleton />;
-  }
+  const login = (username: string, password: string): boolean => {
+    // Validate against hardcoded credentials
+    const user = validateCredentials(username, password);
 
-  return <MsalProvider instance={msalInstance}>{children}</MsalProvider>;
+    if (user) {
+      setStoredAuth(user);
+      setAuthState({ isAuthenticated: true, user });
+      return true;
+    }
+
+    return false;
+  };
+
+  const logout = () => {
+    clearStoredAuth();
+    setAuthState({ isAuthenticated: false, user: null });
+  };
+
+  return (
+    <AuthContext.Provider value={{ ...authState, login, logout, isLoading }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }

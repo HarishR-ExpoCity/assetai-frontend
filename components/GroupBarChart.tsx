@@ -3,7 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-import { barChartData } from './Dashboard';
+// Type definition for bar chart data
+export interface barChartData {
+  project: string;
+  values: {
+    APPROVED: number;
+    PENDING: number;
+    REJECTED: number;
+    DRAFT: number;
+  };
+}
 
 const Plot = dynamic(() => import('react-plotly.js'), {
   ssr: false,

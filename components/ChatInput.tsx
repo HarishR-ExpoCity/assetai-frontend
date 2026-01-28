@@ -55,7 +55,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { accessToken, getAccessToken, idToken } = useAccessToken();
+  const { isAuthenticated } = useAccessToken();
 
   // Initial filter state with no filters applied
   const defaultFilters = {
@@ -86,14 +86,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (accessToken !== null) {
+      if (isAuthenticated) {
         try {
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/suggestions`,
             {
               headers: {
-                Authorization: `Bearer ${idToken}`,
-                Authorization2: `${accessToken}`,
                 Accept: "application/json",
               },
             }
@@ -101,9 +99,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
           const data = await response.json();
           if (response.status === 400) {
-            return { error: data.detail };
-          } else if (response.status === 401) {
-            await getAccessToken(); // Attempt to refresh the token
             return { error: data.detail };
           } else if (!response.ok) {
             throw new Error(
@@ -120,27 +115,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
     fetchSuggestions(); // Fetch suggestions on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const fetchProjects = async () => {
-      if (accessToken !== null) {
+      if (isAuthenticated) {
         try {
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/projects`,
             {
               headers: {
-                Authorization: `Bearer ${idToken}`,
-                Authorization2: `${accessToken}`,
                 Accept: "application/json",
               },
             }
           );
           const data = await response.json();
           if (response.status === 400) {
-            return { error: data.detail };
-          } else if (response.status === 401) {
-            await getAccessToken(); // Attempt to refresh the token
             return { error: data.detail };
           } else if (!response.ok) {
             throw new Error(
@@ -163,18 +153,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
     fetchProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const fetchFileTypes = async () => {
-      if (accessToken !== null) {
+      if (isAuthenticated) {
         try {
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/file_types`,
             {
               headers: {
-                Authorization: `Bearer ${idToken}`,
-                Authorization2: `${accessToken}`,
                 Accept: "application/json",
               },
             }
@@ -182,9 +170,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
           const data = await response.json();
           if (response.status === 400) {
-            return { error: data.detail };
-          } else if (response.status === 401) {
-            await getAccessToken(); // Attempt to refresh the token
             return { error: data.detail };
           } else if (!response.ok) {
             throw new Error(
@@ -200,7 +185,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     };
     fetchFileTypes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

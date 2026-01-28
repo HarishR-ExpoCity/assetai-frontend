@@ -55,7 +55,7 @@ export default function ChatHistory({
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { accessToken, getAccessToken, idToken } = useAccessToken();
+  const { isAuthenticated } = useAccessToken();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -73,14 +73,9 @@ export default function ChatHistory({
     };
   }, []);
 
-  useEffect(() => {
-    if (accessToken == null) {
-      getAccessToken();
-    }
-  }, [accessToken, getAccessToken]);
 
   const fetchChatHistory = useCallback(async () => {
-    if (accessToken === null) return;
+    if (!isAuthenticated) return;
 
     setLoading(true);
     try {
@@ -88,8 +83,6 @@ export default function ChatHistory({
         `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/history`,
         {
           headers: {
-            Authorization: `Bearer ${idToken}`,
-            Authorization2: `${accessToken}`,
             Accept: 'application/json',
           },
         }
@@ -98,8 +91,6 @@ export default function ChatHistory({
       const data = await response.json();
       if (response.ok) {
         setChatHistory(data.chat_history);
-      } else if (response.status === 401) {
-        await getAccessToken();
       } else if (!response.ok) {
         throw new Error(`Error fetching chat history: ${response.statusText}`);
       }
@@ -109,10 +100,10 @@ export default function ChatHistory({
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, getAccessToken]);
+  }, [isAuthenticated]);
 
   const fetchFavoriteChats = useCallback(async () => {
-    if (accessToken === null) return;
+    if (!isAuthenticated) return;
 
     setLoading(true);
     try {
@@ -121,8 +112,6 @@ export default function ChatHistory({
         {
           headers: {
             accept: 'application/json',
-            Authorization: `Bearer ${idToken}`,
-            Authorization2: `${accessToken}`,
           },
         }
       );
@@ -134,8 +123,6 @@ export default function ChatHistory({
           session_id: fav.chat_id.toString(),
         }));
         setFavoriteChats(favoritesFormatted);
-      } else if (response.status === 401) {
-        await getAccessToken();
       } else if (!response.ok) {
         throw new Error(
           `Error fetching favorite chats: ${response.statusText}`
@@ -147,7 +134,7 @@ export default function ChatHistory({
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, getAccessToken]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     fetchChatHistory();
@@ -174,7 +161,7 @@ export default function ChatHistory({
   );
 
   const handleDelete = async (chatSessionId: string) => {
-    if (accessToken !== null) {
+    if (isAuthenticated) {
       try {
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/${chatSessionId}`,
@@ -182,17 +169,12 @@ export default function ChatHistory({
             method: 'DELETE',
             headers: {
               accept: 'application/json',
-              Authorization: `Bearer ${idToken}`,
-              Authorization2: `${accessToken}`,
             },
           }
         );
         const data = await response.json();
 
         if (response.status === 400) {
-          return { error: data.detail };
-        } else if (response.status === 401) {
-          await getAccessToken(); // Attempt to refresh the token
           return { error: data.detail };
         } else if (!response.ok) {
           throw new Error(`Error deleting the chat: ${response.statusText}`);

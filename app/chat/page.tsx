@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useIsAuthenticated } from '@azure/msal-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth/auth-provider';
 
 import Layout from '@/components/Layout';
 import ChatWindow from '@/components/ChatWindow';
 import ChatHistory from '@/components/ChatHistory';
 
-export default function Home() {
+export default function ChatPage() {
   const [isChatHistoryCollapsed, setChatHistoryCollapsed] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<
     string | undefined
@@ -19,14 +19,14 @@ export default function Home() {
     undefined
   );
 
-  const isAuthenticated = useIsAuthenticated();
+  const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isLoading && !isAuthenticated) {
       router.push('/');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isLoading, router]);
 
   const handleSelectChat = (sessionId: string) => {
     setSelectedSessionId(sessionId);
@@ -45,6 +45,20 @@ export default function Home() {
   const handleFavoriteClick = (query: string) => {
     setInitialQuery(query);
   };
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className='flex items-center justify-center h-[calc(100vh-100px)]'>
+          <p>Loading...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <Layout>
