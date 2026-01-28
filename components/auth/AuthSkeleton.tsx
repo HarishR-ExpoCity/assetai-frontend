@@ -44,34 +44,12 @@ export function AuthSkeleton() {
     }, []);
 
     return (
-        <div className="w-full h-screen overflow-hidden p-4 space-y-4">
-            <div className="h-full w-full">
-                {/* Header skeleton */}
-                <div className="card-shadow rounded-xl px-6 py-3 dark:border-[#FFFFFF26]">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center space-x-8">
-                            <Skeleton className="h-[45px] w-[326px] bg-gray-200 dark:bg-gray-700" />
-                            <div className="hidden md:flex space-x-4">
-                                <Skeleton className="h-[34px] w-16 bg-gray-200 dark:bg-gray-700" />
-                                <Skeleton className="h-[34px] w-[115px] bg-gray-200 dark:bg-gray-700" />
-                                <Skeleton className="h-[34px] w-[175px] bg-gray-200 dark:bg-gray-700" />
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <Skeleton className="h-9 w-32 bg-gray-200 dark:bg-gray-700" />
-                            <Skeleton className="h-9 w-[108px] bg-gray-200 dark:bg-gray-700" />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Main content skeleton - adjusted height to prevent scrolling */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-                    <div className="md:col-span-3 space-y-3">
-                        <Skeleton className="h-[calc(100vh-130px)] w-full rounded-xl bg-gray-200 dark:bg-gray-700" />
-                    </div>
-                    <div className="md:col-span-1">
-                        <Skeleton className="h-[calc(100vh-130px)] w-full rounded-xl bg-gray-200 dark:bg-gray-700" />
-                    </div>
+        <div className="flex items-center justify-center w-full h-screen">
+            <div className="flex flex-col space-y-3">
+                <Skeleton className="h-[125px] w-[250px] rounded-xl" />
+                <div className="space-y-2">
+                    <Skeleton className="h-4 w-[250px]" />
+                    <Skeleton className="h-4 w-[200px]" />
                 </div>
             </div>
         </div>

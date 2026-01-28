@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { z } from 'zod';
@@ -25,6 +25,7 @@ import {
   useFormField,
 } from '@/components/ui/form';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function FormMessage() {
   const { error, formMessageId } = useFormField();
@@ -60,7 +61,25 @@ const signupSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 type SignupFormData = z.infer<typeof signupSchema>;
 
-export default function AuthPage() {
+// Loading fallback for Suspense
+function AuthPageSkeleton() {
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4 bg-muted/40">
+      <div className="w-full max-w-lg">
+        <div className="flex flex-col space-y-3">
+          <Skeleton className="h-[125px] w-full rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Inner component that uses useSearchParams
+function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -163,7 +182,7 @@ export default function AuthPage() {
               onClick={() => switchMode('login')}
               className={`flex-1 flex items-center justify-center gap-2 p-4 transition-colors ${
                 isLogin
-                  ? 'border-b-2 border-primary text-primary font-medium'
+                  ? 'btn-border text-foreground font-medium'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -175,7 +194,7 @@ export default function AuthPage() {
               onClick={() => switchMode('signup')}
               className={`flex-1 flex items-center justify-center gap-2 p-4 transition-colors ${
                 !isLogin
-                  ? 'border-b-2 border-primary text-primary font-medium'
+                  ? 'btn-border text-foreground font-medium'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -217,10 +236,10 @@ export default function AuthPage() {
                           </span>
                           <Input
                             id="login-email"
-                            type="text"
+                            type="email"
                             placeholder="example@mail.com"
                             autoComplete="email"
-                            className="h-10 pl-10 pr-10 transition-all"
+                            className="h-10 pl-10 pr-10 auth-input transition-all"
                             {...field}
                           />
                           {field.value && (
@@ -258,7 +277,7 @@ export default function AuthPage() {
                             type={showPassword ? 'text' : 'password'}
                             placeholder="Enter your password"
                             autoComplete="current-password"
-                            className="h-10 pl-10 pr-16 transition-all"
+                            className="h-10 pl-10 pr-16 auth-input transition-all"
                             {...field}
                           />
                           <div className="absolute inset-y-0 right-0 flex items-center">
@@ -343,7 +362,7 @@ export default function AuthPage() {
                             type="text"
                             placeholder="Enter your name"
                             autoComplete="given-name"
-                            className="h-10 pl-10 pr-10 transition-all"
+                            className="h-10 pl-10 pr-10 auth-input transition-all"
                             {...field}
                           />
                           {field.value && (
@@ -381,7 +400,7 @@ export default function AuthPage() {
                             type="email"
                             placeholder="example@mail.com"
                             autoComplete="email"
-                            className="h-10 pl-10 pr-10 transition-all"
+                            className="h-10 pl-10 pr-10 auth-input transition-all"
                             {...field}
                           />
                           {field.value && (
@@ -419,7 +438,7 @@ export default function AuthPage() {
                             type={showPassword ? 'text' : 'password'}
                             placeholder="Create a password"
                             autoComplete="new-password"
-                            className="h-10 pl-10 pr-16 transition-all"
+                            className="h-10 pl-10 pr-16 auth-input transition-all"
                             {...field}
                           />
                           <div className="absolute inset-y-0 right-0 flex items-center">
@@ -484,5 +503,14 @@ export default function AuthPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Wrap with Suspense for useSearchParams
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<AuthPageSkeleton />}>
+      <AuthPageContent />
+    </Suspense>
   );
 }

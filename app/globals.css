@@ -198,6 +198,29 @@ body {
   );
 }
 
+/* Auth input styling - consistent focus and active states */
+.auth-input {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-input:focus-visible {
+  border-color: #9859ff;
+  box-shadow: 0 0 0 3px rgba(152, 89, 255, 0.15);
+  outline: none;
+  --tw-ring-color: transparent;
+}
+
+:is(.dark .auth-input) {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+:is(.dark .auth-input:focus-visible) {
+  border-color: #9859ff;
+  box-shadow: 0 0 0 3px rgba(152, 89, 255, 0.25);
+}
+
 .btn-border {
   border-bottom: 2px solid;
   border-image-source: linear-gradient(

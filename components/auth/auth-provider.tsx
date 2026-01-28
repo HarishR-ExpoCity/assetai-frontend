@@ -1,12 +1,13 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { AuthState, getStoredAuth, clearStoredAuth, getUserFromToken } from './auth';
-import { login as apiLogin, logout as apiLogout, LoginRequest, ApiResult, LoginResponse } from '@/services/auth-api';
+import { AuthState, getStoredAuth, clearStoredAuth, getUserFromToken, isAccessTokenExpired } from './auth';
+import { login as apiLogin, logout as apiLogout, LoginRequest, ApiResult, LoginResponse, refreshAccessToken, hasStoredTokens, clearTokens } from '@/services/auth-api';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<ApiResult<LoginResponse>>;
   logout: () => void;
+  handleSessionExpired: () => void;
   isLoading: boolean;
 }
 
@@ -33,9 +34,34 @@ export default function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     // Check for existing session on mount
-    const stored = getStoredAuth();
-    setAuthState(stored);
-    setIsLoading(false);
+    const initAuth = async () => {
+      const hasTokens = hasStoredTokens();
+
+      if (!hasTokens) {
+        setAuthState({ isAuthenticated: false, user: null });
+        setIsLoading(false);
+        return;
+      }
+
+      const tokenExpired = isAccessTokenExpired();
+
+      if (tokenExpired) {
+        const result = await refreshAccessToken();
+
+        if (!result.success) {
+          clearTokens();
+          setAuthState({ isAuthenticated: false, user: null });
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      const stored = getStoredAuth();
+      setAuthState(stored);
+      setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<ApiResult<LoginResponse>> => {
@@ -57,8 +83,14 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     setAuthState({ isAuthenticated: false, user: null });
   }, []);
 
+  // Called when an API call detects session has expired (e.g., getValidAccessToken returns null)
+  const handleSessionExpired = useCallback(() => {
+    clearTokens();
+    setAuthState({ isAuthenticated: false, user: null });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ ...authState, login, logout, handleSessionExpired, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

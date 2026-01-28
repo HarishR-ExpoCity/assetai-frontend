@@ -21,6 +21,8 @@ import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
 import { CancelRounded as CancelRoundedIcon } from '@mui/icons-material';
 import { useAccessToken } from './../hooks/useAccessToken';
 import { addBasePath } from 'next/dist/client/add-base-path';
+import { sendChatMessage } from '@/services/chat-api';
+import { getValidAccessToken } from '@/services/auth-api';
 
 interface FileMessageContent {
   fileName: string;
@@ -101,6 +103,7 @@ export default function ChatWindow({
 }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string>(uuidv4());
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null); // API session_id for continuing conversations
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileMessageContent | null>(
     null
@@ -178,6 +181,7 @@ export default function ChatWindow({
   const resetChat = () => {
     setMessages([]);
     setSessionId(uuidv4());
+    setChatSessionId(null); // Clear API session for new conversation
     setSelectedFile(null);
     setSelectedFileId(null);
     setFilterResetTrigger((prev) => !prev);
@@ -190,6 +194,9 @@ export default function ChatWindow({
 
 
   useEffect(() => {
+    // Reset API session when switching chats
+    setChatSessionId(null);
+
     const fetchChatHistory = async () => {
       if (!selectedSessionId) {
         // Clear messages when selectedSessionId is undefined (new chat)
@@ -477,7 +484,7 @@ export default function ChatWindow({
     messageContent: string,
     filters: { project: string; fileType: string; count: string }
   ) => {
-    let userMessage: Message = {
+    const userMessage: Message = {
       sender: 'User',
       content: messageContent,
       timestamp: format(new Date(), 'hh:mm a, d MMM'),
@@ -489,371 +496,135 @@ export default function ChatWindow({
     setMessages((prevMessages) => [...prevMessages, userMessage]);
     setLoading(true);
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
-      const apiUrl = selectedFile
-        ? `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/search/sources`
-        : `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/search`;
+      if (!isAuthenticated) {
+        setLoading(false);
+        return;
+      }
 
-      const body = selectedFile
-        ? {
-            file_full_path: selectedFile.filePath,
-            file_id: selectedFile.fileId,
-            file_name: selectedFile.fileName,
-            session_id: selectedSessionId ? selectedSessionId : sessionId,
-            user_query: messageContent,
-            results: filters.count ? filters.count : '10',
+      if (selectedFile) {
+        // File-specific query - use existing /search/sources endpoint for now
+        const accessToken = await getValidAccessToken();
+        if (!accessToken) {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              sender: 'Bot',
+              content: 'Session expired. Please log in again.',
+              timestamp: format(new Date(), 'hh:mm a, d MMM'),
+              type: 'text',
+            },
+          ]);
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/search/sources`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              file_full_path: selectedFile.filePath,
+              file_id: selectedFile.fileId,
+              file_name: selectedFile.fileName,
+              session_id: selectedSessionId ? selectedSessionId : sessionId,
+              user_query: messageContent,
+              results: filters.count ? filters.count : '10',
+            }),
+            signal: abortController.signal,
           }
-        : {
-            file_type: filters.fileType,
-            project_name: filters.project,
-            search_query: messageContent,
-            session_id: selectedSessionId ? selectedSessionId : sessionId,
-            results: filters.count ? filters.count : '10',
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch response');
+        }
+
+        let data = await response.json();
+        data = typeof data === 'string' ? JSON.parse(data) : data;
+
+        if (data.response) {
+          const botResponse: Message = {
+            sender: 'Bot',
+            content: data.response,
+            timestamp: format(new Date(), 'hh:mm a, d MMM'),
+            type: 'text',
+            selectedFileName: selectedFile?.fileName,
+            selectedFilePath: selectedFile?.filePath,
           };
-
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-      if (isAuthenticated) {
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
+          setMessages((prevMessages) => [...prevMessages, botResponse]);
+        }
+      } else {
+        // General chat query - use new /chat/ endpoint
+        const result = await sendChatMessage(
+          {
+            text: messageContent,
+            ...(chatSessionId && { session_id: chatSessionId }), // Include session_id for continuation
           },
-          body: JSON.stringify(body),
-          signal: abortController.signal,
-        });
+          abortController.signal
+        );
 
-        if (response.status == 400) {
-          return { error: 'Bad request' };
-        } else if (!response.ok) throw new Error('Failed to fetch stream');
-        else if (response.ok) {
-          try {
-            if (!selectedFile) {
-              const reader = response.body?.getReader();
-              if (!reader) throw new Error('Unable to read stream');
-              const search_results = [];
-              let partialData = '';
-              let chatId: any;
-
-              const updateMessages = (newContent: React.ReactNode) => {
-                setMessages((prevMessages) => {
-                  const lastMessage = prevMessages[prevMessages.length - 1];
-                  if (
-                    lastMessage?.type === 'file' &&
-                    lastMessage?.chatId === chatId
-                  ) {
-                    // Update existing message
-                    return [
-                      ...prevMessages.slice(0, -1),
-                      { ...lastMessage, content: newContent },
-                    ];
-                  } else {
-                    // Create new message
-                    return [
-                      ...prevMessages,
-                      {
-                        sender: 'Bot',
-                        content: newContent,
-                        timestamp: format(new Date(), 'hh:mm a, d MMM'),
-                        type: 'file',
-                        chatId,
-                        isFavorite: false,
-                      },
-                    ];
-                  }
-                });
-              };
-
-              while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-
-                const chunk = new TextDecoder().decode(value);
-                const completeData = partialData + chunk;
-                const lines = completeData.split('\n');
-
-                for (let i = 0; i < lines.length - 1; i++) {
-                  const line = lines[i].trim();
-                  if (line.startsWith('data: ')) {
-                    try {
-                      const jsonData = JSON.parse(line.slice(5));
-                      if (jsonData.type === 'chat') {
-                        chatId = jsonData.data.chat_id;
-                        // Update the user message with chatId and re-set state
-                        userMessage = {
-                          ...userMessage,
-                          chatId,
-                          isFavorite: false,
-                        };
-                        setMessages((prevMessages) => [
-                          ...prevMessages.slice(0, -1),
-                          userMessage,
-                        ]);
-                      } else if (jsonData.type === 'doc') {
-                        search_results.push(jsonData.data);
-
-                        const fileMessageContent = (
-                          <div className='dark:bg-[#FFFFFF0D] dark:text-white bg-[#0000000d] chat-bubble rounded-3xl p-2 max-w-[80%]'>
-                            {search_results.map((result) => (
-                              <div
-                                key={result.file_id}
-                                className='p-4 dark:bg-[#222222] bg-white chat-cluster dark:border-b-[#FFFFFF0D] border-b border-b-[#0000000D]'
-                              >
-                                <div className='flex justify-between items-center w-full mb-2'>
-                                  <div className='flex-1 min-w-0 mr-1 text-xs font-semibold tracking-[0.025em] break-all dark:text-white whitespace-pre-wrap'>
-                                    {result.file_name}
-                                  </div>
-                                  <div className='flex items-center gap-1'>
-                                    {result?.tags?.map((tag: string) => (
-                                      <div
-                                        key={result.file_id}
-                                        className='flex gap-2'
-                                      >
-                                        <span className='px-2 py-1 dark:bg-[#FFFFFF40] bg-[#0000000d] text-[8px] font-semibold leading-[12px] rounded flex items-center justify-center'>
-                                          {tag}
-                                        </span>
-                                      </div>
-                                    ))}
-
-                                    {result.related_files &&
-                                      result.related_files.length > 0 &&
-                                      result.related_files.map(
-                                        (
-                                          relatedFile: RelatedFile,
-                                          index: number
-                                        ) => (
-                                          <TooltipProvider
-                                            key={`related-file-tooltip-${index}`}
-                                          >
-                                            <Tooltip>
-                                              <TooltipTrigger asChild>
-                                                <Button
-                                                  key={`related-file-${index}`}
-                                                  variant='ghost'
-                                                  size='sm'
-                                                  onClick={() =>
-                                                    window.open(
-                                                      relatedFile.file_url,
-                                                      '_blank'
-                                                    )
-                                                  }
-                                                >
-                                                  {relatedFile.file_type ===
-                                                  'pdf' ? (
-                                                    <Image
-                                                      src={addBasePath(
-                                                        '/icons/pdf.svg'
-                                                      )}
-                                                      alt='PDF'
-                                                      width={20}
-                                                      height={20}
-                                                    />
-                                                  ) : relatedFile.file_type ===
-                                                    'dwg' ? (
-                                                    <Image
-                                                      src={addBasePath(
-                                                        '/icons/dwg.svg'
-                                                      )}
-                                                      alt='DWG'
-                                                      width={20}
-                                                      height={20}
-                                                    />
-                                                  ) : relatedFile.file_type ===
-                                                    'mht' ? (
-                                                    <Image
-                                                      src={addBasePath(
-                                                        '/icons/mht.svg'
-                                                      )}
-                                                      alt='MHT'
-                                                      width={20}
-                                                      height={20}
-                                                    />
-                                                  ) : (
-                                                    <OpenInNewRoundedIcon fontSize='small' />
-                                                  )}
-                                                </Button>
-                                              </TooltipTrigger>
-                                              <TooltipContent>
-                                                <p>{relatedFile.file_name}</p>
-                                              </TooltipContent>
-                                            </Tooltip>
-                                          </TooltipProvider>
-                                        )
-                                      )}
-
-                                    <div className='flex items-center dark:text-white'>
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant='ghost'
-                                              size='sm'
-                                              onClick={() =>
-                                                window.open(
-                                                  result.file_url,
-                                                  '_blank'
-                                                )
-                                              }
-                                            >
-                                              {result.file_type === 'pdf' ? (
-                                                <Image
-                                                  src={addBasePath(
-                                                    '/icons/pdf.svg'
-                                                  )}
-                                                  alt='PDF'
-                                                  width={20}
-                                                  height={20}
-                                                />
-                                              ) : result.file_type === 'dwg' ? (
-                                                <Image
-                                                  src={addBasePath(
-                                                    '/icons/dwg.svg'
-                                                  )}
-                                                  alt='DWG'
-                                                  width={20}
-                                                  height={20}
-                                                />
-                                              ) : result.file_type === 'mht' ? (
-                                                <Image
-                                                  src={addBasePath(
-                                                    '/icons/mht.svg'
-                                                  )}
-                                                  alt='MHT'
-                                                  width={20}
-                                                  height={20}
-                                                />
-                                              ) : (
-                                                <OpenInNewRoundedIcon fontSize='small' />
-                                              )}
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <p>{result.file_name}</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant='ghost'
-                                              size='sm'
-                                              onClick={() =>
-                                                handleSelectFile(
-                                                  result.file_id,
-                                                  result.file_name,
-                                                  result.file_path
-                                                )
-                                              }
-                                              className={`${
-                                                selectedFileId ===
-                                                result.file_id
-                                                  ? 'text-blue-500'
-                                                  : ''
-                                              }`}
-                                            >
-                                              <CheckCircleOutlineRoundedIcon fontSize='small' />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <p>Select this file</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className='text-xs font-light tracking-[0.025em] break-all max-w-full dark:text-white whitespace-pre-wrap'>
-                                  {result.file_path}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                        updateMessages(fileMessageContent);
-                        setLoading(true);
-                      } else if (jsonData.type == 'end') {
-                        setLoading(false);
-                      }
-                    } catch (error) {
-                      console.error('Error parsing JSON:', error);
-                      if (error) {
-                        console.error('Failed to process stream:', error);
-                        setMessages((prevMessages) => [
-                          ...prevMessages,
-                          {
-                            sender: 'Bot',
-                            content:
-                              'An error occurred while processing your request.',
-                            timestamp: format(new Date(), 'hh:mm a, d MMM'),
-                            type: 'text',
-                          },
-                        ]);
-                      }
-                    }
-                  }
-                }
-
-                partialData = lines[lines.length - 1];
-              }
-              // After processing all chunks
-              if (search_results.length === 0) {
-                // No document found
-                const noFileResponse: Message = {
-                  sender: 'Bot',
-                  content:
-                    'No document found.\nPlease try again with a different query.',
-                  timestamp: format(new Date(), 'hh:mm a, d MMM'),
-                  type: 'text',
-                  selectedFileName: '',
-                  selectedFilePath: '',
-                };
-                setMessages((prevMessages) => [
-                  ...prevMessages,
-                  noFileResponse,
-                ]);
-              }
-              setLoading(false);
-            } else {
-              let data = await response.json();
-              data = typeof data === 'string' ? JSON.parse(data) : data;
-
-              if (selectedFile && data.response) {
-                // Display the specific response from the /sources API
-                const botResponse: Message = {
-                  sender: 'Bot',
-                  content: data.response,
-                  timestamp: format(new Date(), 'hh:mm a, d MMM'),
-                  type: 'text',
-                  selectedFileName: selectedFile?.fileName,
-                  selectedFilePath: selectedFile?.filePath,
-                };
-                setLoading(false);
-                setMessages((prevMessages) => [...prevMessages, botResponse]);
-              }
-            }
-          } catch (error: any) {
-            if (error.name === 'AbortError') {
-              console.log('Fetch aborted');
-            }
-            setLoading(false);
-          } finally {
-            abortControllerRef.current = null;
+        if (result.success && result.data) {
+          // Store session_id for subsequent messages
+          if (result.data.session_id && !chatSessionId) {
+            setChatSessionId(result.data.session_id);
           }
-          setLoading(false);
+
+          const botResponse: Message = {
+            sender: 'Bot',
+            content: result.data.text,
+            timestamp: format(new Date(), 'hh:mm a, d MMM'),
+            type: 'text',
+            chatId: result.data.id,
+            isFavorite: false,
+          };
+          setMessages((prevMessages) => {
+            // Update user message with chatId
+            const updatedMessages = prevMessages.map((msg, idx) =>
+              idx === prevMessages.length - 1
+                ? { ...msg, chatId: result.data!.id, isFavorite: false }
+                : msg
+            );
+            return [...updatedMessages, botResponse];
+          });
         } else {
-          setLoading(false);
-          console.error('Error fetching chat details:', response.statusText);
+          // Error response
+          const errorMessage: Message = {
+            sender: 'Bot',
+            content: result.error || 'An error occurred while processing your request.',
+            timestamp: format(new Date(), 'hh:mm a, d MMM'),
+            type: 'text',
+          };
+          setMessages((prevMessages) => [...prevMessages, errorMessage]);
         }
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('Request aborted');
+      } else {
+        console.error('Failed to send message:', error);
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            sender: 'Bot',
+            content: 'An error occurred while processing your request.',
+            timestamp: format(new Date(), 'hh:mm a, d MMM'),
+            type: 'text',
+          },
+        ]);
+      }
+    } finally {
+      abortControllerRef.current = null;
       setLoading(false);
-      console.error('Failed to fetch chat details:', error);
+      scrollToBottom();
     }
-    // After updating messages or setting loading state, scroll to bottom
-    scrollToBottom();
   };
 
   const handleFavoriteToggle = async (

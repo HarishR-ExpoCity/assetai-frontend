@@ -5,7 +5,7 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { getAccessToken, getValidAccessToken } from '@/services/auth-api';
 
 export const useAccessToken = () => {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, logout, handleSessionExpired } = useAuth();
 
   /**
    * Get a valid access token, refreshing if necessary
@@ -14,13 +14,13 @@ export const useAccessToken = () => {
   const getToken = useCallback(async (): Promise<string | null> => {
     const token = await getValidAccessToken();
 
-    // If token refresh failed, logout the user
+    // If token refresh failed, trigger session expired flow
     if (!token && isAuthenticated) {
-      logout();
+      handleSessionExpired();
     }
 
     return token;
-  }, [isAuthenticated, logout]);
+  }, [isAuthenticated, handleSessionExpired]);
 
   return {
     isAuthenticated,

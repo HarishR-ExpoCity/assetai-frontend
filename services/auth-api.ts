@@ -10,6 +10,9 @@ const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_EMAIL_KEY = 'user_email';
 
+// Refresh lock to prevent concurrent refresh requests
+let refreshPromise: Promise<ApiResult<RefreshResponse>> | null = null;
+
 // ============ Interfaces ============
 
 export interface SignupRequest {
@@ -127,10 +130,14 @@ export function decodeToken(token: string): Record<string, unknown> | null {
  */
 export function isTokenExpired(token: string): boolean {
   const payload = decodeToken(token);
-  if (!payload || typeof payload.exp !== 'number') return true;
+  if (!payload || typeof payload.exp !== 'number') {
+    return true;
+  }
 
-  // Add 10 second buffer
-  return Date.now() >= (payload.exp * 1000) - 10000;
+  const expiresAt = payload.exp * 1000;
+  const now = Date.now();
+  // Add 10 second buffer to refresh before actual expiry
+  return now >= expiresAt - 10000;
 }
 
 /**
@@ -254,12 +261,13 @@ export function logout(): void {
 
 export interface RefreshResponse {
   access: string;
+  refresh?: string; // Some backends return a new refresh token (token rotation)
 }
 
 /**
- * Refresh access token using refresh token
+ * Internal function to perform the actual refresh
  */
-export async function refreshAccessToken(): Promise<ApiResult<RefreshResponse>> {
+async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
   const refreshToken = getRefreshToken();
 
   if (!refreshToken) {
@@ -282,7 +290,6 @@ export async function refreshAccessToken(): Promise<ApiResult<RefreshResponse>> 
     const responseData = await response.json();
 
     if (!response.ok) {
-      // Refresh token is invalid/expired - clear all tokens
       clearTokens();
       return {
         success: false,
@@ -290,22 +297,45 @@ export async function refreshAccessToken(): Promise<ApiResult<RefreshResponse>> 
       };
     }
 
-    // Update access token
-    const newAccessToken = (responseData as RefreshResponse).access;
-    localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
+    const refreshData = responseData as RefreshResponse;
+    localStorage.setItem(ACCESS_TOKEN_KEY, refreshData.access);
+
+    // If backend uses token rotation, also update refresh token
+    if (refreshData.refresh) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, refreshData.refresh);
+    }
 
     return {
       success: true,
-      data: responseData as RefreshResponse,
+      data: refreshData,
     };
-  } catch (error) {
-    console.error('Token refresh error:', error);
+  } catch {
     return {
       success: false,
       error: {
         detail: 'Network error. Please check your connection and try again.',
       },
     };
+  }
+}
+
+/**
+ * Refresh access token using refresh token
+ * Uses a lock to prevent concurrent refresh requests (important for token rotation)
+ */
+export async function refreshAccessToken(): Promise<ApiResult<RefreshResponse>> {
+  // If a refresh is already in progress, wait for it
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  // Start new refresh and store the promise
+  refreshPromise = performRefresh();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
   }
 }
 

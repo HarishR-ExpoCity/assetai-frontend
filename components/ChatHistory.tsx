@@ -16,6 +16,8 @@ import {
 import { useAccessToken } from '@/hooks/useAccessToken';
 import Image from 'next/image';
 import { addBasePath } from 'next/dist/client/add-base-path';
+import { getChatList, deleteChat } from '@/services/chat-api';
+import { getValidAccessToken } from '@/services/auth-api';
 
 interface ChatHistoryProps {
   isCollapsed: boolean;
@@ -79,27 +81,23 @@ export default function ChatHistory({
 
     setLoading(true);
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/history`,
-        {
-          headers: {
-            Accept: 'application/json',
-          },
-        }
-      );
+      const result = await getChatList();
 
-      const data = await response.json();
-      if (response.ok) {
-        setChatHistory(data.chat_history);
-      } else if (!response.ok) {
-        throw new Error(`Error fetching chat history: ${response.statusText}`);
+      if (result.success && result.data) {
+        // Map new API response to existing format
+        const formattedHistory = result.data.results.map((chat) => ({
+          user_query: chat.text,
+          session_id: chat.session.toString(),
+        }));
+        setChatHistory(formattedHistory);
+      } else {
+        console.error('Failed to fetch chat history:', result.error);
       }
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const fetchFavoriteChats = useCallback(async () => {
@@ -107,11 +105,18 @@ export default function ChatHistory({
 
     setLoading(true);
     try {
+      const accessToken = await getValidAccessToken();
+      if (!accessToken) {
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/favorites`,
         {
           headers: {
-            accept: 'application/json',
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
           },
         }
       );
@@ -123,7 +128,7 @@ export default function ChatHistory({
           session_id: fav.chat_id.toString(),
         }));
         setFavoriteChats(favoritesFormatted);
-      } else if (!response.ok) {
+      } else {
         throw new Error(
           `Error fetching favorite chats: ${response.statusText}`
         );
@@ -133,7 +138,6 @@ export default function ChatHistory({
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -161,31 +165,19 @@ export default function ChatHistory({
   );
 
   const handleDelete = async (chatSessionId: string) => {
-    if (isAuthenticated) {
-      try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/${chatSessionId}`,
-          {
-            method: 'DELETE',
-            headers: {
-              accept: 'application/json',
-            },
-          }
-        );
-        const data = await response.json();
+    if (!isAuthenticated) return;
 
-        if (response.status === 400) {
-          return { error: data.detail };
-        } else if (!response.ok) {
-          throw new Error(`Error deleting the chat: ${response.statusText}`);
-        } else if (response.ok) {
-          fetchChatHistory();
-        }
-      } catch (error) {
-        console.error('Failed to delete the chat:', error);
-      } finally {
-        setLoading(false);
+    try {
+      const result = await deleteChat(chatSessionId);
+
+      if (result.success) {
+        fetchChatHistory();
+      } else {
+        console.error('Delete error:', result.error);
       }
+    } catch (error) {
+      console.error('Failed to delete the chat:', error);
+    } finally {
       setActiveDropdown(null);
     }
   };
