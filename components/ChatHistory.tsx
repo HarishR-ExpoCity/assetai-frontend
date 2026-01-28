@@ -295,6 +295,8 @@ export default function ChatHistory({
           <div className='relative'>
             <SearchRoundedIcon className='absolute left-3 top-1/2 transform -translate-y-1/2' />
             <Input
+              id="chat-history-search"
+              name="chat-history-search"
               type='text'
               placeholder='Search topic...'
               className='pl-10 flex-grow h-10 dark:text-white dark:border-[#FFFFFF26]'

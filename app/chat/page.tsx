@@ -24,7 +24,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/');
+      router.push('/auth');
     }
   }, [isAuthenticated, isLoading, router]);
 

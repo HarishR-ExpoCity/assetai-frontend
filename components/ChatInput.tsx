@@ -410,6 +410,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
           <form onSubmit={handleSubmit} className="flex items-center space-x-2">
             <div className="relative flex-grow" ref={inputRef}>
               <Input
+                id="chat-query-input"
+                name="chat-query"
                 type="text"
                 placeholder="Type your query..."
                 className="header-tabs flex-grow border-input h-12 dark:text-white dark:border-[#FFFFFF26]"

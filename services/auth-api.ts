@@ -1,0 +1,337 @@
+/**
+ * Auth API Service
+ * Handles authentication-related API calls (signup, login, etc.)
+ */
+
+const AUTH_API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL || '';
+
+// Token storage keys
+const ACCESS_TOKEN_KEY = 'access_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
+const USER_EMAIL_KEY = 'user_email';
+
+// ============ Interfaces ============
+
+export interface SignupRequest {
+  email: string;
+  password: string;
+  first_name: string;
+}
+
+export interface SignupResponse {
+  id?: number;
+  email?: string;
+  first_name?: string;
+  message?: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  access: string;
+  refresh: string;
+}
+
+export interface ApiError {
+  email?: string[];
+  password?: string[];
+  first_name?: string[];
+  detail?: string;
+  non_field_errors?: string[];
+}
+
+export interface ApiResult<T> {
+  success: boolean;
+  data?: T;
+  error?: ApiError;
+}
+
+// ============ Token Management ============
+
+/**
+ * Store tokens in localStorage
+ */
+export function storeTokens(access: string, refresh: string): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(ACCESS_TOKEN_KEY, access);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+  }
+}
+
+/**
+ * Get access token from localStorage
+ */
+export function getAccessToken(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  }
+  return null;
+}
+
+/**
+ * Get refresh token from localStorage
+ */
+export function getRefreshToken(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  }
+  return null;
+}
+
+/**
+ * Clear all tokens from localStorage
+ */
+export function clearTokens(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_EMAIL_KEY);
+  }
+}
+
+/**
+ * Get stored user email
+ */
+export function getStoredEmail(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(USER_EMAIL_KEY);
+  }
+  return null;
+}
+
+/**
+ * Check if user has valid tokens stored
+ */
+export function hasStoredTokens(): boolean {
+  return !!getAccessToken();
+}
+
+/**
+ * Decode JWT token payload (without verification)
+ */
+export function decodeToken(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = atob(payload);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if token is expired
+ */
+export function isTokenExpired(token: string): boolean {
+  const payload = decodeToken(token);
+  if (!payload || typeof payload.exp !== 'number') return true;
+
+  // Add 10 second buffer
+  return Date.now() >= (payload.exp * 1000) - 10000;
+}
+
+/**
+ * Register a new user
+ */
+export async function signup(data: SignupRequest): Promise<ApiResult<SignupResponse>> {
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/signup/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: responseData as ApiError,
+      };
+    }
+
+    return {
+      success: true,
+      data: responseData as SignupResponse,
+    };
+  } catch (error) {
+    console.error('Signup error:', error);
+    return {
+      success: false,
+      error: {
+        detail: 'Network error. Please check your connection and try again.',
+      },
+    };
+  }
+}
+
+/**
+ * Format API validation errors into a user-friendly message
+ */
+export function formatApiError(error: ApiError): string {
+  const messages: string[] = [];
+
+  if (error.detail) {
+    return error.detail;
+  }
+
+  if (error.non_field_errors) {
+    messages.push(...error.non_field_errors);
+  }
+
+  if (error.email) {
+    messages.push(`Email: ${error.email.join(', ')}`);
+  }
+
+  if (error.password) {
+    messages.push(`Password: ${error.password.join(', ')}`);
+  }
+
+  if (error.first_name) {
+    messages.push(`Name: ${error.first_name.join(', ')}`);
+  }
+
+  return messages.length > 0 ? messages.join('\n') : 'An unknown error occurred.';
+}
+
+// ============ Auth API Calls ============
+
+/**
+ * Login user and get JWT tokens
+ */
+export async function login(data: LoginRequest): Promise<ApiResult<LoginResponse>> {
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/api/token/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: responseData as ApiError,
+      };
+    }
+
+    // Store tokens and email on successful login
+    const loginData = responseData as LoginResponse;
+    storeTokens(loginData.access, loginData.refresh);
+    localStorage.setItem(USER_EMAIL_KEY, data.email);
+
+    return {
+      success: true,
+      data: loginData,
+    };
+  } catch (error) {
+    console.error('Login error:', error);
+    return {
+      success: false,
+      error: {
+        detail: 'Network error. Please check your connection and try again.',
+      },
+    };
+  }
+}
+
+/**
+ * Logout user - clear tokens
+ */
+export function logout(): void {
+  clearTokens();
+}
+
+export interface RefreshResponse {
+  access: string;
+}
+
+/**
+ * Refresh access token using refresh token
+ */
+export async function refreshAccessToken(): Promise<ApiResult<RefreshResponse>> {
+  const refreshToken = getRefreshToken();
+
+  if (!refreshToken) {
+    return {
+      success: false,
+      error: { detail: 'No refresh token available' },
+    };
+  }
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/api/token/refresh/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      // Refresh token is invalid/expired - clear all tokens
+      clearTokens();
+      return {
+        success: false,
+        error: responseData as ApiError,
+      };
+    }
+
+    // Update access token
+    const newAccessToken = (responseData as RefreshResponse).access;
+    localStorage.setItem(ACCESS_TOKEN_KEY, newAccessToken);
+
+    return {
+      success: true,
+      data: responseData as RefreshResponse,
+    };
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    return {
+      success: false,
+      error: {
+        detail: 'Network error. Please check your connection and try again.',
+      },
+    };
+  }
+}
+
+/**
+ * Get a valid access token, refreshing if necessary
+ * Returns null if unable to get a valid token (user needs to re-login)
+ */
+export async function getValidAccessToken(): Promise<string | null> {
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    return null;
+  }
+
+  // If token is not expired, return it
+  if (!isTokenExpired(accessToken)) {
+    return accessToken;
+  }
+
+  // Token is expired, try to refresh
+  const result = await refreshAccessToken();
+
+  if (result.success && result.data) {
+    return result.data.access;
+  }
+
+  // Refresh failed - user needs to re-login
+  return null;
+}

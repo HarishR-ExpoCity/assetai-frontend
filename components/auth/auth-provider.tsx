@@ -1,10 +1,11 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AuthState, getStoredAuth, setStoredAuth, clearStoredAuth, validateCredentials } from './auth';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { AuthState, getStoredAuth, clearStoredAuth, getUserFromToken } from './auth';
+import { login as apiLogin, logout as apiLogout, LoginRequest, ApiResult, LoginResponse } from '@/services/auth-api';
 
 interface AuthContextType extends AuthState {
-  login: (username: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<ApiResult<LoginResponse>>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -37,23 +38,24 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(false);
   }, []);
 
-  const login = (username: string, password: string): boolean => {
-    // Validate against hardcoded credentials
-    const user = validateCredentials(username, password);
+  const login = useCallback(async (email: string, password: string): Promise<ApiResult<LoginResponse>> => {
+    const request: LoginRequest = { email, password };
+    const result = await apiLogin(request);
 
-    if (user) {
-      setStoredAuth(user);
+    if (result.success) {
+      // Get user from the newly stored token
+      const user = getUserFromToken();
       setAuthState({ isAuthenticated: true, user });
-      return true;
     }
 
-    return false;
-  };
+    return result;
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
+    apiLogout();
     clearStoredAuth();
     setAuthState({ isAuthenticated: false, user: null });
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ ...authState, login, logout, isLoading }}>

@@ -54,7 +54,7 @@ const Header = () => {
   // Use local user info from auth context
   useEffect(() => {
     if (user) {
-      setUsername(user.username || 'User');
+      setUsername(user.email || 'User');
     }
   }, [user]);
 
