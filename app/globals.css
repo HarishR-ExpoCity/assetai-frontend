@@ -339,6 +339,14 @@ body {
   border-bottom: transparent;
 }
 
+.table-row-style.show-border-bottom:last-child {
+  border-bottom: 0.5px solid #00000026;
+}
+
+.dark .table-row-style.show-border-bottom:last-child {
+  border-bottom: 0.5px solid #ffffff1a;
+}
+
 .table-head .table-row-style:first-child {
   border-top: transparent;
 }

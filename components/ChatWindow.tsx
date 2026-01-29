@@ -441,7 +441,7 @@ export default function ChatWindow({
                               )
                             )
                           ) : (
-                            <div className='p-2'>
+                            <div className='p-2 text-xs font-normal tracking-[0.025em]'>
                               No document found. Please try again with a
                               different query.
                             </div>
@@ -449,7 +449,7 @@ export default function ChatWindow({
                         </div>
                       )
                     ) : (
-                      <div className='p-2'>
+                      <div className='p-2 text-xs font-normal tracking-[0.025em]'>
                         No document found. Please try again with a different
                         query.
                       </div>
@@ -575,8 +575,10 @@ export default function ChatWindow({
 
         if (result.success && result.data) {
           // Store session_id for subsequent messages
+          // If this is a new chat (no existing chatSessionId), refresh history
           if (result.data.session_id && !chatSessionId) {
             setChatSessionId(result.data.session_id);
+            onNewChat(); // Refresh chat history to show the new chat
           }
 
           const botResponse: Message = {

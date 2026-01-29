@@ -1,18 +1,26 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+'use client';
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import ArrowForwardIosRoundedIcon from '@mui/icons-material/ArrowForwardIosRounded';
 import ArrowBackIosRoundedIcon from '@mui/icons-material/ArrowBackIosRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
-import {
-  MoreHoriz as Actions,
-  DeleteRounded as DeleteIcon,
-  // EditRounded as EditIcon,
-} from '@mui/icons-material';
+import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useAccessToken } from '@/hooks/useAccessToken';
 import Image from 'next/image';
 import { addBasePath } from 'next/dist/client/add-base-path';
@@ -20,7 +28,7 @@ import { getChatHistory, deleteChat } from '@/services/chat-api';
 import { getValidAccessToken } from '@/services/auth-api';
 import { useEnvConfig } from '@/context/EnvContext';
 
-interface ChatHistoryProps {
+type ChatHistoryProps = {
   isCollapsed: boolean;
   onToggleSidebar: () => void;
   onSelectChat: (sessionId: string) => void;
@@ -28,23 +36,23 @@ interface ChatHistoryProps {
   refreshHistory: boolean;
   onFavoriteClick: (query: string) => void;
   selectedSessionId?: string;
-}
+};
 
-interface ChatHistoryItem {
+type ChatHistoryItem = {
   search_query: string;
   session_id: string;
-}
+};
 
-interface FavoriteChat {
+type FavoriteChat = {
   user_query: string;
   chat_id: number;
-}
+};
 
-interface FavoriteItem {
+type FavoriteItem = {
   id: number;
   user_query: string;
   session_id: string;
-}
+};
 
 export default function ChatHistory({
   isCollapsed,
@@ -59,35 +67,26 @@ export default function ChatHistory({
   const [searchQuery, setSearchQuery] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [favoriteChats, setFavoriteChats] = useState<FavoriteItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(true);
 
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // Delete confirmation dialog state
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Combined loading state
+  const loading = isLoadingHistory || isLoadingFavorites;
 
   const { isAuthenticated } = useAccessToken();
   const { assetaiApiBaseUrl } = useEnvConfig();
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setActiveDropdown(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-
   const fetchChatHistory = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setIsLoadingHistory(false);
+      return;
+    }
 
-    setLoading(true);
+    setIsLoadingHistory(true);
     try {
       const result = await getChatHistory();
 
@@ -99,30 +98,30 @@ export default function ChatHistory({
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
     } finally {
-      setLoading(false);
+      setIsLoadingHistory(false);
     }
   }, [isAuthenticated]);
 
   const fetchFavoriteChats = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setIsLoadingFavorites(false);
+      return;
+    }
 
-    setLoading(true);
+    setIsLoadingFavorites(true);
     try {
       const accessToken = await getValidAccessToken();
       if (!accessToken) {
-        setLoading(false);
+        setIsLoadingFavorites(false);
         return;
       }
 
-      const response = await fetch(
-        `${assetaiApiBaseUrl}/chat/favorites`,
-        {
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
+      const response = await fetch(`${assetaiApiBaseUrl}/chat/favorites`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
 
       const data = await response.json();
       if (response.ok) {
@@ -134,13 +133,13 @@ export default function ChatHistory({
         setFavoriteChats(favoritesFormatted);
       } else {
         throw new Error(
-          `Error fetching favorite chats: ${response.statusText}`
+          `Error fetching favorite chats: ${response.statusText}`,
         );
       }
     } catch (error) {
       console.error('Failed to fetch favorite chats:', error);
     } finally {
-      setLoading(false);
+      setIsLoadingFavorites(false);
     }
   }, [isAuthenticated, assetaiApiBaseUrl]);
 
@@ -154,6 +153,15 @@ export default function ChatHistory({
     favoriteStatusChanged,
   ]);
 
+  // Filter chats based on search query
+  const filteredChats = useMemo(() => {
+    if (!searchQuery.trim()) return chatHistory;
+    const query = searchQuery.toLowerCase();
+    return chatHistory.filter((chat) =>
+      chat.search_query.toLowerCase().includes(query),
+    );
+  }, [chatHistory, searchQuery]);
+
   const handleFavoriteClick = (query: string) => {
     onFavoriteClick(query);
   };
@@ -162,16 +170,16 @@ export default function ChatHistory({
     onSelectChat(sessionId);
   };
 
-  // Filter chats based on search query
-  const filteredChats = chatHistory.filter((chat) =>
-    chat.search_query.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleDeleteClick = useCallback((sessionId: string) => {
+    setChatToDelete(sessionId);
+    setIsDeleteDialogOpen(true);
+  }, []);
 
-  const handleDelete = async (chatSessionId: string) => {
-    if (!isAuthenticated) return;
+  const confirmDelete = useCallback(async () => {
+    if (!chatToDelete || !isAuthenticated) return;
 
     try {
-      const result = await deleteChat(chatSessionId);
+      const result = await deleteChat(chatToDelete);
 
       if (result.success) {
         fetchChatHistory();
@@ -181,101 +189,98 @@ export default function ChatHistory({
     } catch (error) {
       console.error('Failed to delete the chat:', error);
     } finally {
-      setActiveDropdown(null);
+      setChatToDelete(null);
+      setIsDeleteDialogOpen(false);
     }
-  };
+  }, [chatToDelete, isAuthenticated, fetchChatHistory]);
 
-  // const handleRename = () => {
-  //   // Implement rename functionality
-  //   setActiveDropdown(null);
-  // };
+  const cancelDelete = useCallback(() => {
+    setChatToDelete(null);
+    setIsDeleteDialogOpen(false);
+  }, []);
 
-  const handleActions = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    setActiveDropdown(activeDropdown === sessionId ? null : sessionId);
-  };
+  const renderChatItem = (chat: ChatHistoryItem) => {
+    const isActive = chat.session_id === selectedSessionId;
 
-  const renderChatItem = (chat: ChatHistoryItem) => (
-    <div
-      key={chat.session_id}
-      className={`group relative flex items-center justify-between px-2 mb-1 h-8 cursor-pointer rounded-md hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] ${
-        chat.session_id === selectedSessionId
-          ? 'bg-[#0000000D] dark:bg-[#FFFFFF0D]'
-          : ''
-      }`}
-      onClick={() => handleSelectChat(chat.session_id)}
-    >
-      <p className='text-sm font-light tracking-[0.005em] truncate flex-grow'>
-        {chat.search_query}
-      </p>
-      <button
-        onClick={(e) => handleActions(e, chat.session_id)}
-        className='hidden group-hover:block focus:outline-none'
+    return (
+      <div
+        key={chat.session_id}
+        role='button'
+        tabIndex={0}
+        onClick={() => handleSelectChat(chat.session_id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleSelectChat(chat.session_id);
+          }
+        }}
+        className={`group w-full flex items-center gap-2 px-2 py-2 mb-1 rounded-lg text-left transition-colors cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5836F5] ${
+          isActive
+            ? 'bg-[#0000000D] dark:bg-[#FFFFFF0D]'
+            : 'hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D]'
+        }`}
       >
-        <Actions className='w-4 h-4' />
-      </button>
-      {activeDropdown === chat.session_id && (
-        <div
-          ref={dropdownRef}
-          className='absolute right-0 mt-1 mr-[2px] w-48 rounded-md shadow-lg bg-white dark:bg-[#333333] ring-1 ring-black ring-opacity-5 focus:outline-none z-10'
-          style={{
-            top: '100%',
-            right: '0',
-          }}
+        <ChatBubbleOutlineRoundedIcon
+          className={`flex-shrink-0 ${
+            isActive ? 'text-[#5836F5]' : 'text-gray-500 dark:text-gray-400'
+          }`}
+          style={{ fontSize: 16 }}
+        />
+
+        <span
+          className={`flex-1 min-w-0 font-medium text-xs truncate ${
+            isActive ? 'text-[#5836F5]' : ''
+          }`}
         >
-          <div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(chat.session_id);
-              }}
-              className='flex items-center px-3 py-2 rounded-md text-[#D75C5C] text-sm hover:bg-gray-100 dark:hover:bg-[#FFFFFF0D] w-full'
-            >
-              <DeleteIcon fontSize='small' className='mr-1' />
-              Delete
-            </button>
-            {/* <button
-              onClick={handleRename}
-              className="flex items-center px-4 py-2 text-[#000000D9] text-sm dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 w-full"
-            >
-              <EditIcon className="mr-2" />
-              Rename
-            </button> */}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+          {chat.search_query}
+        </span>
+
+        <button
+          type='button'
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteClick(chat.session_id);
+          }}
+          className='shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5836F5] cursor-pointer'
+          aria-label='Delete chat'
+        >
+          <DeleteOutlineRoundedIcon
+            className='text-gray-400 dark:text-gray-500 hover:text-[#D75C5C]'
+            style={{ fontSize: 18 }}
+          />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div
-      className={`card-shadow rounded-xl p-4 h-[calc(100vh-130px)] flex flex-col transition-all duration-300 dark:border-[#FFFFFF26] space-y-6`}
+      className={`card-shadow rounded-xl p-3 h-[calc(100vh-130px)] flex flex-col transition-all duration-300 dark:border-[#FFFFFF26]`}
     >
       {isCollapsed ? (
-        <div className='flex flex-col items-center justify-between h-full'>
-          {/* Vertically rotated Chat History text */}
+        <div className='flex flex-col items-center justify-between h-full py-2'>
           <div className='flex flex-col items-center'>
-            <HistoryRoundedIcon className='mb-2' />
-            <span className='text-sm font-semibold transform rotate-90 whitespace-nowrap mt-8'>
+            <HistoryRoundedIcon style={{ fontSize: 20 }} />
+            <span className='text-xs font-semibold transform rotate-90 whitespace-nowrap mt-8'>
               Chat History
             </span>
           </div>
 
-          {/* Button to expand the sidebar */}
           <Button
             variant='ghost'
             onClick={onToggleSidebar}
-            className='flex items-center p-2 mt-auto dark:hover:bg-[#FFFFFF0D]'
+            className='flex items-center p-2 mt-auto dark:hover:bg-[#FFFFFF0D] cursor-pointer'
+            aria-label='Expand sidebar'
           >
-            <ArrowBackIosRoundedIcon />
+            <ArrowBackIosRoundedIcon style={{ fontSize: 16 }} />
           </Button>
         </div>
       ) : (
         <>
-          <div className='flex justify-between items-center'>
-            <h2 className='text-base font-semibold'>Chat History</h2>
+          <div className='flex justify-between items-center mb-3'>
+            <h2 className='text-sm font-semibold'>Chat History</h2>
             {chatHistory.length > 0 && (
-              <div className='text-base font-normal flex items-center space-x-2'>
+              <div className='text-xs font-normal flex items-center space-x-2'>
                 <span>Favorites</span>
                 <Switch
                   className='dark:bg-white data-[state=checked]:bg-[#5836F5] dark:data-[state=checked]:bg-[#5836F5] dark:[&_[data-state=checked]]:bg-white'
@@ -287,92 +292,142 @@ export default function ChatHistory({
           </div>
 
           {/* Search Input */}
-          <div className='relative'>
-            <SearchRoundedIcon className='absolute left-3 top-1/2 transform -translate-y-1/2' />
+          <div className='relative mb-3'>
+            <SearchRoundedIcon
+              className='absolute left-3 top-1/2 transform -translate-y-1/2 text-[#222222] dark:text-[#FFFFFF]'
+              style={{ fontSize: 18 }}
+            />
             <Input
-              id="chat-history-search"
-              name="chat-history-search"
+              id='chat-history-search'
+              name='chat-history-search'
               type='text'
-              placeholder='Search topic...'
-              className='pl-10 flex-grow h-10 dark:text-white dark:border-[#FFFFFF26]'
+              placeholder='Search chats...'
+              className='pl-10 pr-3 h-10 text-xs placeholder:text-xs dark:text-white dark:border-[#FFFFFF26]'
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              autoComplete='off'
+              aria-label='Search chats'
             />
           </div>
 
-          <div className='flex-grow overflow-y-auto space-y-6'>
-            {/* Show Favorites when toggle is on */}
-            {showFavorites && chatHistory.length > 0 && (
-              <div>
-                <h3 className='text-base font-normal tracking-[0.015em] mb-2'>
-                  Favorites
-                </h3>
-                {loading ? (
-                  <>
-                    <Skeleton className='h-4 w-44 mb-2' />
-                  </>
-                ) : favoriteChats.length > 0 ? (
-                  favoriteChats.map((chat) => (
-                    <div
-                      key={chat.id}
-                      className='flex items-center mb-2 cursor-pointer'
-                      onClick={() => handleFavoriteClick(chat.user_query)}
-                    >
-                      <StarRoundedIcon className='text-[#FFCD00] mr-1' />
-                      <p className='text-sm font-light tracking-[0.005em] truncate flex-grow'>
-                        {chat.user_query}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className='text-sm font-light tracking-[0.005em]'>
-                    No favorite chats found
-                  </p>
+          {/* Chat History List */}
+          {loading ? (
+            <div className='flex-1 flex items-center justify-center'>
+              <div className='flex flex-col gap-2 w-full max-w-xs'>
+                <Skeleton className='h-4 w-full' />
+                <Skeleton className='h-4 w-full' />
+                <Skeleton className='h-4 w-3/4' />
+              </div>
+            </div>
+          ) : filteredChats.length === 0 && !showFavorites ? (
+            <div className='flex-1 flex flex-col items-center justify-center px-4'>
+              <Image
+                src={addBasePath('/icons/chat-history.svg')}
+                alt='No Chat History'
+                width={60}
+                height={60}
+                priority
+              />
+              <p className='mt-3 text-xs text-center text-[#00000073] dark:text-[#FFFFFF73]'>
+                {searchQuery ? 'No results found' : 'No chats yet'}
+              </p>
+            </div>
+          ) : (
+            <ScrollArea className='flex-1 -mx-1 px-1 min-h-0'>
+              <div className='space-y-1'>
+                {/* Show Favorites when toggle is on */}
+                {showFavorites && favoriteChats.length > 0 && (
+                  <div className='mb-3'>
+                    <h3 className='text-[10px] font-semibold text-[#00000073] dark:text-[#FFFFFF73] uppercase tracking-wider mb-1.5 px-2'>
+                      Favorites
+                    </h3>
+                    {favoriteChats.map((chat) => (
+                      <div
+                        key={chat.id}
+                        role='button'
+                        tabIndex={0}
+                        onClick={() => handleFavoriteClick(chat.user_query)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleFavoriteClick(chat.user_query);
+                          }
+                        }}
+                        className='flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5836F5]'
+                      >
+                        <StarRoundedIcon
+                          className='text-[#FFCD00] flex-shrink-0'
+                          style={{ fontSize: 16 }}
+                        />
+                        <span className='text-xs truncate'>
+                          {chat.user_query}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Previous Chats */}
+                {filteredChats.length > 0 && (
+                  <div>
+                    <h3 className='text-[10px] font-semibold text-[#00000073] dark:text-[#FFFFFF73] uppercase tracking-wider mb-1.5 px-2'>
+                      {searchQuery ? 'Search Results' : 'Previous Chats'}
+                    </h3>
+                    {filteredChats.map(renderChatItem)}
+                  </div>
                 )}
               </div>
-            )}
-
-            {/* Show filtered Chat History based on search */}
-            <div>
-              <h3 className='text-base font-normal tracking-[0.015em] mb-2'>
-                {searchQuery ? 'Search Results' : 'Previous Chats'}
-              </h3>
-              {loading ? (
-                <>
-                  <Skeleton className='h-8 w-52' />
-                </>
-              ) : (searchQuery ? filteredChats : chatHistory).length > 0 ? (
-                (searchQuery ? filteredChats : chatHistory).map(renderChatItem)
-              ) : (
-                <div className='flex flex-col items-center justify-center h-[calc(100vh-400px)] text-center'>
-                  <Image
-                    src={addBasePath('/icons/chat-history.svg')}
-                    alt='No Chat History'
-                    width={0}
-                    height={0}
-                    sizes='109px'
-                    style={{ width: '109px', height: 'auto' }}
-                    priority
-                  />
-                  <p className='text-sm font-light tracking-[0.005em] mt-2 max-w-md dark:text-[#FFFFFFA6]'>
-                    Once you start using the system, all your recent activity
-                    will appear here.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+            </ScrollArea>
+          )}
 
           <Button
             variant='ghost'
-            className='w-full dark:hover:bg-[#FFFFFF0D]'
+            className='w-full mt-3 h-10 text-sm font-semibold gap-2 dark:hover:bg-[#FFFFFF0D] cursor-pointer'
             onClick={onToggleSidebar}
+            aria-label='Hide sidebar'
           >
-            <ArrowForwardIosRoundedIcon />
-            <span className='text-base font-semibold'>Hide Sidebar</span>
+            <ArrowForwardIosRoundedIcon style={{ fontSize: 16 }} />
+            Hide Sidebar
           </Button>
         </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className='sm:max-w-md dark:bg-[#222222]'>
+          <DialogHeader>
+            <DialogTitle className='text-[#000000D9] dark:text-[#FFFFFFD9] font-semibold text-lg'>
+              Delete chat?
+            </DialogTitle>
+            <DialogDescription className='text-[#000000D9] dark:text-[#FFFFFFD9] text-base font-light'>
+              This will delete{' '}
+              <span className='font-semibold'>
+                {chatHistory.find((c) => c.session_id === chatToDelete)
+                  ?.search_query || 'this chat'}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className='sm:justify-end'>
+            <div className='flex gap-2 mt-4'>
+              <Button
+                variant='ghost'
+                onClick={cancelDelete}
+                className='flex-1 bg-[#0000000d] dark:bg-[#FFFFFF0D] text-[#222222] dark:text-white px-4 py-1 cursor-pointer'
+              >
+                Cancel
+              </Button>
+              <Button
+                type='button'
+                variant='destructive'
+                onClick={confirmDelete}
+                className='bg-[#D75C5C] hover:bg-[#D75C5C]/90 dark:text-[#222222] px-4 py-1 font-semibold cursor-pointer'
+              >
+                Delete
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
