@@ -284,6 +284,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               onKeyDown={handleKeyPress}
               disabled={isDisabled}
               ref={inputRef}
+              autoComplete="off"
             />
 
             <Button

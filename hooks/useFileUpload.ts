@@ -33,6 +33,7 @@ export function useFileUpload(options: UploadOptions) {
 
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeUploadsRef = useRef(0);
+  const processingIdsRef = useRef<Set<string>>(new Set());
 
   // Generate unique ID for each file
   const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -156,7 +157,10 @@ export function useFileUpload(options: UploadOptions) {
   // Process upload queue with concurrency control
   const processQueue = useCallback(async () => {
     setFiles(currentFiles => {
-      const pendingFiles = currentFiles.filter(f => f.status === 'pending');
+      // Filter pending files that aren't already being processed
+      const pendingFiles = currentFiles.filter(
+        f => f.status === 'pending' && !processingIdsRef.current.has(f.id)
+      );
       const availableSlots = maxConcurrent - activeUploadsRef.current;
 
       if (pendingFiles.length === 0 || availableSlots <= 0) {
@@ -164,6 +168,9 @@ export function useFileUpload(options: UploadOptions) {
       }
 
       const filesToUpload = pendingFiles.slice(0, availableSlots);
+
+      // Mark files as being processed (prevents duplicate uploads)
+      filesToUpload.forEach(f => processingIdsRef.current.add(f.id));
 
       // Mark files as uploading
       const updatedFiles = currentFiles.map(f =>
@@ -178,6 +185,7 @@ export function useFileUpload(options: UploadOptions) {
 
         const result = await uploadFile({ ...fileItem, status: 'uploading' });
         activeUploadsRef.current--;
+        processingIdsRef.current.delete(fileItem.id);
 
         onFileComplete?.(result);
 
@@ -228,6 +236,7 @@ export function useFileUpload(options: UploadOptions) {
     if (controller) {
       controller.abort();
     }
+    processingIdsRef.current.delete(id);
     // Remove from queue if pending
     setFiles(prev => prev.filter(f => f.id !== id));
   }, []);
@@ -236,6 +245,7 @@ export function useFileUpload(options: UploadOptions) {
   const cancelAll = useCallback(() => {
     abortControllersRef.current.forEach(controller => controller.abort());
     abortControllersRef.current.clear();
+    processingIdsRef.current.clear();
     setFiles([]);
     setIsUploading(false);
     activeUploadsRef.current = 0;

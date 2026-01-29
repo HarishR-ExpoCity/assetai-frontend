@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useEnvConfig } from '@/context/EnvContext';
 import Layout from '@/components/Layout';
 import { FileUploader } from '@/components/FileUploader';
+import { FilePreview } from '@/components/FilePreview';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import {
   Table,
@@ -29,12 +30,25 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { dummyFiles, FileStatus } from '@/data/dummy-files';
+import { getFilesList, mapFileStatus, FileItem, FileStatus } from '@/services/files-api';
 
 export default function FileManagementPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const { assetaiApiBaseUrl } = useEnvConfig();
   const router = useRouter();
+
+  const [filesList, setFilesList] = useState<FileItem[]>([]);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(true);
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const fetchFiles = useCallback(async () => {
+    const result = await getFilesList();
+    if (result.success && result.data) {
+      setFilesList(result.data);
+    }
+    setIsLoadingFiles(false);
+  }, []);
 
   const {
     files,
@@ -45,11 +59,12 @@ export default function FileManagementPage() {
     cancelAll,
     clearCompleted,
   } = useFileUpload({
-    url: `${assetaiApiBaseUrl}/upload/`,
+    url: `${assetaiApiBaseUrl}/files/upload/`,
     maxConcurrent: 3,
     onFileComplete: (file) => {
       if (file.status === 'success') {
-        console.log('File uploaded successfully:', file.file.name);
+        // Refresh files list when a file is uploaded successfully
+        fetchFiles();
       }
     },
     onAllComplete: (files) => {
@@ -67,19 +82,30 @@ export default function FileManagementPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchFiles();
+    }
+  }, [isAuthenticated, fetchFiles]);
+
   const getStatusIcon = (status: FileStatus) => {
     switch (status) {
       case 'completed':
         return (
-          <CheckCircleRoundedIcon className='text-green-500' fontSize='small' />
+          <CheckCircleRoundedIcon
+            className='text-green-500'
+            style={{ fontSize: 16 }}
+          />
         );
       case 'failed':
-        return <ErrorRoundedIcon className='text-red-500' fontSize='small' />;
+        return (
+          <ErrorRoundedIcon className='text-red-500' style={{ fontSize: 16 }} />
+        );
       case 'processing':
         return (
           <SyncRoundedIcon
             className='text-[#5836F5] animate-spin'
-            fontSize='small'
+            style={{ fontSize: 16 }}
           />
         );
       case 'pending':
@@ -87,7 +113,7 @@ export default function FileManagementPage() {
         return (
           <HourglassEmptyRoundedIcon
             className='text-gray-400'
-            fontSize='small'
+            style={{ fontSize: 16 }}
           />
         );
     }
@@ -105,6 +131,20 @@ export default function FileManagementPage() {
       default:
         return 'Pending';
     }
+  };
+
+  const handleDownload = (file: FileItem) => {
+    window.open(file.url, '_blank');
+  };
+
+  const handlePreview = (file: FileItem) => {
+    setPreviewFile(file);
+    setIsPreviewOpen(true);
+  };
+
+  const handlePreviewClose = () => {
+    setIsPreviewOpen(false);
+    setPreviewFile(null);
   };
 
   if (isLoading) {
@@ -153,7 +193,14 @@ export default function FileManagementPage() {
           {/* Right side - Files Table (60%) */}
           <div className='w-[60%] h-full'>
             <div className='card-shadow rounded-xl dark:border-[#FFFFFF26] h-full flex flex-col overflow-hidden'>
-              {dummyFiles.length === 0 ? (
+              {isLoadingFiles ? (
+                <div className='flex items-center justify-center flex-1'>
+                  <SyncRoundedIcon
+                    className='text-[#5836F5] animate-spin'
+                    style={{ fontSize: 32 }}
+                  />
+                </div>
+              ) : filesList.length === 0 ? (
                 <div className='flex flex-col items-center justify-center flex-1 text-center'>
                   <CloudUploadRoundedIcon
                     className='text-gray-300 dark:text-gray-600 mb-3'
@@ -183,60 +230,69 @@ export default function FileManagementPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dummyFiles.map((file, index) => (
-                        <TableRow
-                          key={file.id}
-                          className={`hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] ${
-                            index === dummyFiles.length - 1
-                              ? 'show-border-bottom'
-                              : ''
-                          }`}
-                        >
-                          <TableCell className='font-medium truncate max-w-[300px]'>
-                            {file.fileName}
-                          </TableCell>
-                          <TableCell>
-                            <div className='flex items-center gap-2'>
-                              {getStatusIcon(file.status)}
-                              <span className='text-sm'>
-                                {getStatusText(file.status)}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className='text-center'>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant='ghost'
-                                  size='sm'
-                                  className='h-8 w-8 p-0 cursor-pointer'
+                      {filesList.map((file, index) => {
+                        const status = mapFileStatus(file);
+                        return (
+                          <TableRow
+                            key={file.id}
+                            className={`hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] ${
+                              index === filesList.length - 1
+                                ? 'show-border-bottom'
+                                : ''
+                            }`}
+                          >
+                            <TableCell
+                              onClick={() => handlePreview(file)}
+                              className='font-medium truncate max-w-[300px] cursor-pointer hover:text-[#5836F5]'
+                            >
+                              {file.filename}
+                            </TableCell>
+                            <TableCell>
+                              <div className='flex items-center gap-2'>
+                                {getStatusIcon(status)}
+                                <span className='text-xs'>
+                                  {getStatusText(status)}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className='text-center'>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant='ghost'
+                                    size='sm'
+                                    className='h-8 w-8 p-0 cursor-pointer'
+                                  >
+                                    <MoreVertRoundedIcon fontSize='small' />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  align='end'
+                                  className='w-auto p-1'
                                 >
-                                  <MoreVertRoundedIcon fontSize='small' />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                align='end'
-                                className='w-auto p-1'
-                              >
-                                <button className='flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent cursor-pointer'>
-                                  <DownloadRoundedIcon
-                                    style={{ fontSize: 16 }}
-                                    className='mr-2'
-                                  />
-                                  Download
-                                </button>
-                                <button className='flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent cursor-pointer text-red-500'>
-                                  <DeleteRoundedIcon
-                                    className='mr-2'
-                                    style={{ fontSize: 16 }}
-                                  />
-                                  Delete
-                                </button>
-                              </PopoverContent>
-                            </Popover>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                  <button
+                                    onClick={() => handleDownload(file)}
+                                    className='flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent cursor-pointer'
+                                  >
+                                    <DownloadRoundedIcon
+                                      style={{ fontSize: 16 }}
+                                      className='mr-2'
+                                    />
+                                    Download
+                                  </button>
+                                  <button className='flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent cursor-pointer text-red-500'>
+                                    <DeleteRoundedIcon
+                                      className='mr-2'
+                                      style={{ fontSize: 16 }}
+                                    />
+                                    Delete
+                                  </button>
+                                </PopoverContent>
+                              </Popover>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -245,6 +301,12 @@ export default function FileManagementPage() {
           </div>
         </div>
       </div>
+
+      <FilePreview
+        file={previewFile}
+        isOpen={isPreviewOpen}
+        onClose={handlePreviewClose}
+      />
     </Layout>
   );
 }

@@ -326,6 +326,7 @@ export default function ChatHistory({
                 alt='No Chat History'
                 width={60}
                 height={60}
+                style={{ width: 'auto', height: 'auto' }}
                 priority
               />
               <p className='mt-3 text-xs text-center text-[#00000073] dark:text-[#FFFFFF73]'>

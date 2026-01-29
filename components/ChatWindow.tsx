@@ -18,7 +18,6 @@ import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
-import { CancelRounded as CancelRoundedIcon } from '@mui/icons-material';
 import { useAccessToken } from './../hooks/useAccessToken';
 import { addBasePath } from 'next/dist/client/add-base-path';
 import { sendChatMessage } from '@/services/chat-api';
@@ -128,31 +127,21 @@ export default function ChatWindow({
   }, [messages, loading]);
 
   const DotLoader = () => (
-    <div className='flex flex-col items-center space-y-1 my-1 mx-2'>
-      <div className='flex space-x-1'>
-        <div
-          className='dot bg-slate-400 dark:bg-white w-2.5 h-2.5 rounded-full animate-bounce'
-          style={{ animationDelay: '0ms' }}
-        />
-        <div
-          className='dot bg-slate-400 dark:bg-white w-2.5 h-2.5 rounded-full animate-bounce'
-          style={{ animationDelay: '200ms' }}
-        />
-        <div
-          className='dot bg-slate-400 dark:bg-white w-2.5 h-2.5 rounded-full animate-bounce'
-          style={{ animationDelay: '400ms' }}
-        />
-      </div>
-      <span className='text-xs tracking-[0.025em] dark:text-white mt-1'>
-        We are processing the query...
+    <div className='flex items-center gap-2 my-1 mx-2'>
+      <div
+        className='w-5 h-5 border-2 border-[#1C1B1F] dark:border-[#39C2F7] rounded-full animate-spin'
+        style={{ borderTopColor: 'transparent' }}
+      />
+      <span className='text-sm text-[#000000] dark:text-[#FFFFFF]'>
+        Processing...
       </span>
       <Button
-        variant='secondary'
+        variant='ghost'
         size='sm'
         onClick={handleCancelRequest}
-        className='dark:bg-[#FFFFFF0D] bg-[#0000000D] w-full mt-2'
+        className='dark:hover:bg-transparent hover:bg-transparent p-0 h-auto font-normal text-[#39C2F7] hover:text-[#2A9FD6]'
       >
-        <CancelRoundedIcon fontSize='small' /> Cancel Request
+        Cancel
       </Button>
     </div>
   );

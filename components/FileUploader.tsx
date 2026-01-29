@@ -45,11 +45,11 @@ function formatFileSize(bytes: number): string {
 function getStatusIcon(status: FileUploadItem['status']) {
   switch (status) {
     case 'success':
-      return <SuccessIcon className="w-5 h-5 text-green-500" />;
+      return <SuccessIcon className='w-4 h-4 text-green-500' />;
     case 'error':
-      return <ErrorIcon className="w-5 h-5 text-red-500" />;
+      return <ErrorIcon className='w-4 h-4 text-red-500' />;
     default:
-      return <FileIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />;
+      return <FileIcon className='w-4 h-4 text-gray-400 dark:text-gray-500' />;
   }
 }
 
@@ -77,28 +77,32 @@ export function FileUploader({
 
       if (rejectedFiles.length > 0) {
         rejectedFiles.forEach(({ file, errors }) => {
-          console.error(`File ${file.name} rejected:`, errors.map(e => e.message).join(', '));
+          console.error(
+            `File ${file.name} rejected:`,
+            errors.map((e) => e.message).join(', '),
+          );
         });
       }
     },
-    [onAddFiles]
+    [onAddFiles],
   );
 
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
-    onDrop,
-    accept,
-    maxSize,
-    maxFiles,
-    disabled: disabled || isUploading,
-    multiple: true,
-  });
+  const { getRootProps, getInputProps, isDragActive, isDragReject } =
+    useDropzone({
+      onDrop,
+      accept,
+      maxSize,
+      maxFiles,
+      disabled: disabled || isUploading,
+      multiple: true,
+    });
 
-  const completedCount = files.filter(f => f.status === 'success').length;
-  const errorCount = files.filter(f => f.status === 'error').length;
+  const completedCount = files.filter((f) => f.status === 'success').length;
+  const errorCount = files.filter((f) => f.status === 'error').length;
   const hasCompleted = completedCount > 0 || errorCount > 0;
 
   return (
-    <div className={cn('w-full space-y-4', className)}>
+    <div className={cn('w-full flex flex-col flex-1 min-h-0', className)}>
       {/* Dropzone */}
       <div
         {...getRootProps()}
@@ -108,26 +112,29 @@ export function FileUploader({
           'dark:border-[#FFFFFF26] dark:hover:border-primary/50 dark:hover:bg-primary/5',
           isDragActive && !isDragReject && 'border-primary bg-primary/10',
           isDragReject && 'border-red-500 bg-red-50 dark:bg-red-950/20',
-          (disabled || isUploading) && 'opacity-50 cursor-not-allowed hover:border-gray-300'
+          (disabled || isUploading) &&
+            'opacity-50 cursor-not-allowed hover:border-gray-300',
         )}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center justify-center text-center space-y-3">
+        <div className='flex flex-col items-center justify-center text-center space-y-3'>
           <UploadIcon
             className={cn(
               'w-12 h-12 transition-colors',
-              isDragActive ? 'text-primary' : 'text-gray-400 dark:text-gray-500'
+              isDragActive
+                ? 'text-primary'
+                : 'text-gray-400 dark:text-gray-500',
             )}
           />
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+          <div className='space-y-1'>
+            <p className='text-sm font-medium text-gray-700 dark:text-gray-200'>
               {isDragActive
                 ? isDragReject
                   ? 'Some files are not allowed'
                   : 'Drop files here'
                 : 'Drag & drop files here, or click to select'}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className='text-xs text-gray-500 dark:text-gray-400'>
               Max {maxFiles} files, up to {formatFileSize(maxSize)} each
             </p>
           </div>
@@ -136,31 +143,31 @@ export function FileUploader({
 
       {/* File List */}
       {files.length > 0 && (
-        <div className="space-y-3">
+        <div className='flex flex-col flex-1 min-h-0 mt-4'>
           {/* Header with actions */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+          <div className='flex items-center justify-between'>
+            <p className='text-sm font-medium text-gray-700 dark:text-gray-200'>
               {files.length} file{files.length !== 1 ? 's' : ''}
               {completedCount > 0 && ` • ${completedCount} uploaded`}
               {errorCount > 0 && ` • ${errorCount} failed`}
             </p>
-            <div className="flex items-center space-x-2">
+            <div className='flex items-center space-x-2'>
               {hasCompleted && onClearCompleted && (
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant='ghost'
+                  size='sm'
                   onClick={onClearCompleted}
-                  className="text-xs h-7"
+                  className='text-xs h-7'
                 >
                   Clear completed
                 </Button>
               )}
               {isUploading && onCancelAll && (
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant='ghost'
+                  size='sm'
                   onClick={onCancelAll}
-                  className="text-xs h-7 text-red-500 hover:text-red-600"
+                  className='text-xs h-7 text-red-500 hover:text-red-600'
                 >
                   Cancel all
                 </Button>
@@ -169,63 +176,65 @@ export function FileUploader({
           </div>
 
           {/* File items */}
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {files.map(item => (
+          <div className='space-y-2 flex-1 overflow-y-auto min-h-0 mt-3'>
+            {files.map((item) => (
               <div
                 key={item.id}
                 className={cn(
                   'flex items-center space-x-3 p-3 rounded-lg',
                   'bg-gray-50 dark:bg-[#FFFFFF0D]',
-                  item.status === 'error' && 'bg-red-50 dark:bg-red-950/20'
+                  item.status === 'error' && 'bg-red-50 dark:bg-red-950/20',
                 )}
               >
                 {/* Icon */}
                 {getStatusIcon(item.status)}
 
                 {/* File info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate text-gray-700 dark:text-gray-200">
+                <div className='flex-1 min-w-0'>
+                  <p className='text-sm font-medium truncate text-gray-700 dark:text-gray-200'>
                     {item.file.name}
                   </p>
-                  <div className="flex items-center space-x-2">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className='flex items-center space-x-2'>
+                    <p className='text-xs text-gray-500 dark:text-gray-400'>
                       {formatFileSize(item.file.size)}
                     </p>
                     {item.status === 'uploading' && (
-                      <span className="text-xs text-primary">{item.progress}%</span>
+                      <span className='text-xs text-primary'>
+                        {item.progress}%
+                      </span>
                     )}
                     {item.status === 'error' && item.error && (
-                      <span className="text-xs text-red-500">{item.error}</span>
+                      <span className='text-xs text-red-500'>{item.error}</span>
                     )}
                   </div>
 
                   {/* Progress bar */}
                   {item.status === 'uploading' && (
-                    <Progress value={item.progress} className="h-1 mt-2" />
+                    <Progress value={item.progress} className='h-1 mt-2' />
                   )}
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center space-x-1">
+                <div className='flex items-center space-x-1'>
                   {item.status === 'error' && (
                     <Button
-                      variant="ghost"
-                      size="sm"
+                      variant='ghost'
+                      size='sm'
                       onClick={() => onRetryUpload(item.id)}
-                      className="h-8 w-8 p-0"
-                      aria-label="Retry upload"
+                      className='h-8 w-8 p-0'
+                      aria-label='Retry upload'
                     >
-                      <RetryIcon className="w-4 h-4" />
+                      <RetryIcon className='w-4 h-4' />
                     </Button>
                   )}
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    variant='ghost'
+                    size='sm'
                     onClick={() => onRemoveFile(item.id)}
-                    className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    aria-label="Remove file"
+                    className='h-8 w-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                    aria-label='Remove file'
                   >
-                    <CloseIcon className="w-4 h-4" />
+                    <CloseIcon className='w-4 h-4' />
                   </Button>
                 </div>
               </div>
