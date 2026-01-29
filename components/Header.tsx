@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import ChatBubbleRoundedIcon from '@mui/icons-material/ChatBubbleRounded';
+import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
 import { useAccessToken } from '@/hooks/useAccessToken';
 import { addBasePath } from 'next/dist/client/add-base-path';
 
@@ -35,9 +36,11 @@ const Header = () => {
 
   // Determine active tab based on current pathname
   const activeTab = useMemo(() => {
-    if (!pathname) return 0;
+    if (!pathname) return '';
     const normalizedPath = pathname.replace(/\/$/, '');
-    return normalizedPath === '/chat' ? 0 : 0;
+    if (normalizedPath === '/chat') return 'chat';
+    if (normalizedPath === '/file-management') return 'files';
+    return '';
   }, [pathname]);
 
   const { user, logout } = useAccessToken();
@@ -101,7 +104,7 @@ const Header = () => {
                   <Link
                     href='/chat'
                     className={`flex items-center header-tabs ${
-                      activeTab === 0 ? 'btn-border' : ''
+                      activeTab === 'chat' ? 'btn-border' : ''
                     } dark:text-white`}
                   >
                     <ChatBubbleRoundedIcon
@@ -109,6 +112,17 @@ const Header = () => {
                       className='mr-2'
                     />
                     Chat
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href='/file-management'
+                    className={`flex items-center header-tabs ${
+                      activeTab === 'files' ? 'btn-border' : ''
+                    } dark:text-white`}
+                  >
+                    <FolderRoundedIcon fontSize='inherit' className='mr-2' />
+                    Files Management
                   </Link>
                 </li>
               </ul>

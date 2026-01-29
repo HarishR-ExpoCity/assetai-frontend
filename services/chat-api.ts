@@ -30,18 +30,13 @@ export interface ChatApiResult<T> {
   error?: string;
 }
 
-export interface ChatListItem {
-  id: number;
-  text: string;
-  created_at: string;
-  session: number;
+export interface ChatHistoryItem {
+  search_query: string;
+  session_id: string;
 }
 
-export interface ChatListResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: ChatListItem[];
+export interface ChatHistoryResponse {
+  chat_history: ChatHistoryItem[];
 }
 
 // ============ API Calls ============
@@ -103,9 +98,9 @@ export async function sendChatMessage(
 }
 
 /**
- * Get list of chats (paginated)
+ * Get chat history
  */
-export async function getChatList(): Promise<ChatApiResult<ChatListResponse>> {
+export async function getChatHistory(): Promise<ChatApiResult<ChatHistoryResponse>> {
   try {
     const accessToken = await getValidAccessToken();
 
@@ -116,7 +111,7 @@ export async function getChatList(): Promise<ChatApiResult<ChatListResponse>> {
       };
     }
 
-    const response = await fetch(`${getBaseUrl()}/chat/`, {
+    const response = await fetch(`${getBaseUrl()}/chat/history/`, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -129,16 +124,16 @@ export async function getChatList(): Promise<ChatApiResult<ChatListResponse>> {
     if (!response.ok) {
       return {
         success: false,
-        error: responseData.detail || 'Failed to fetch chat list',
+        error: responseData.detail || 'Failed to fetch chat history',
       };
     }
 
     return {
       success: true,
-      data: responseData as ChatListResponse,
+      data: responseData as ChatHistoryResponse,
     };
   } catch (error) {
-    console.error('Chat list API error:', error);
+    console.error('Chat history API error:', error);
     return {
       success: false,
       error: 'Network error. Please check your connection and try again.',
@@ -147,9 +142,9 @@ export async function getChatList(): Promise<ChatApiResult<ChatListResponse>> {
 }
 
 /**
- * Delete a chat by ID
+ * Delete a chat session by session ID
  */
-export async function deleteChat(chatId: string | number): Promise<ChatApiResult<void>> {
+export async function deleteChat(sessionId: string): Promise<ChatApiResult<void>> {
   try {
     const accessToken = await getValidAccessToken();
 
@@ -160,7 +155,7 @@ export async function deleteChat(chatId: string | number): Promise<ChatApiResult
       };
     }
 
-    const response = await fetch(`${getBaseUrl()}/chat/${chatId}/`, {
+    const response = await fetch(`${getBaseUrl()}/session/${sessionId}/`, {
       method: 'DELETE',
       headers: {
         Accept: 'application/json',

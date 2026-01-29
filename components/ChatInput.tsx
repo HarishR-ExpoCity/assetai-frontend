@@ -26,7 +26,7 @@ import { useEnvConfig } from "@/context/EnvContext";
 interface ChatInputProps {
   onSendMessage: (
     messageContent: string,
-    filters: { project: string; fileType: string; count: string; }
+    filters: { fileType: string; count: string; }
   ) => void;
   isDisabled: boolean;
   selectedFile: { fileName: string; fileId: number; filePath: string; } | null;
@@ -47,7 +47,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const [inputValue, setInputValue] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [projectOptions, setProjectOptions] = useState<string[]>([]);
   const [fileTypes, setFileTypes] = useState<string[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +56,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // Initial filter state with no filters applied
   const defaultFilters = {
-    project: "",
     count: "",
     fileType: "",
   };
@@ -81,44 +79,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
       setInputValue(initialQuery);
     }
   }, [initialQuery]);
-
-  useEffect(() => {
-    const fetchProjects = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await fetch(
-            `${assetaiApiBaseUrl}/chat/projects`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-          const data = await response.json();
-          if (response.status === 400) {
-            return { error: data.detail };
-          } else if (!response.ok) {
-            throw new Error(
-              `Error fetching the projects: ${response.statusText}`
-            );
-          } else if (response.ok) {
-            const projects = data.project_names || [];
-            setProjectOptions(projects);
-            // if (projects.length > 0) {
-            //     const firstProject = projects[0];
-            //     setTempFilters((prev) => ({ ...prev, project: firstProject }));
-            //     setFilters((prev) => ({ ...prev, project: firstProject })); // Set the first project as default
-            // }
-          }
-        } catch (error) {
-          console.error("Failed to fetch projects:", error);
-        }
-      }
-    };
-
-    fetchProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
 
   useEffect(() => {
     const fetchFileTypes = async () => {
@@ -195,19 +155,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     <div className="flex flex-col mt-2 space-y-2 relative">
       {/* Filter Selections Display */}
       <div className="flex space-x-1 items-center text-sm ls">
-        {filters.project && (
-          <div className="bg-[#0000000D] dark:bg-stone-600 dark:text-[#FFFFFFD9] px-3 rounded-md flex items-center space-x-2">
-            <span>{filters.project}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleRemoveFilter("project")}
-              className="text-gray-500 dark:text-white px-1 hover:bg-transparent"
-            >
-              <CancelRoundedIcon fontSize="small" />
-            </Button>
-          </div>
-        )}
         {filters.count && (
           <div className="bg-[#0000000D] dark:bg-stone-600 dark:text-[#FFFFFFD9] px-3 rounded-md flex items-center space-x-2">
             <span>Top {filters.count}</span>
@@ -274,26 +221,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
             className="p-4 w-auto min-w-52"
           >
             <div className="space-y-4">
-              <div>
-                <Select
-                  onValueChange={(value) =>
-                    handleTempFilterChange("project", value)
-                  }
-                  value={tempFilters.project || undefined}
-                >
-                  <SelectTrigger className="w-full mt-1">
-                    <SelectValue placeholder="Project Name" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projectOptions.map((project) => (
-                      <SelectItem key={project} value={project}>
-                        {project}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div>
                 <Select
                   onValueChange={(value) =>

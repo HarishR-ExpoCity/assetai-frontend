@@ -38,6 +38,7 @@
     "next-themes": "^0.3.0",
     "react": "^18",
     "react-dom": "^18",
+    "react-dropzone": "^14.3.8",
     "react-hook-form": "^7.53.1",
     "react-router-dom": "^6.28.0",
     "tailwind-merge": "^2.5.4",

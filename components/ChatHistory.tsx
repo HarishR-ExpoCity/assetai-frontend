@@ -16,7 +16,7 @@ import {
 import { useAccessToken } from '@/hooks/useAccessToken';
 import Image from 'next/image';
 import { addBasePath } from 'next/dist/client/add-base-path';
-import { getChatList, deleteChat } from '@/services/chat-api';
+import { getChatHistory, deleteChat } from '@/services/chat-api';
 import { getValidAccessToken } from '@/services/auth-api';
 import { useEnvConfig } from '@/context/EnvContext';
 
@@ -31,14 +31,19 @@ interface ChatHistoryProps {
 }
 
 interface ChatHistoryItem {
-  id: number;
-  user_query: string;
+  search_query: string;
   session_id: string;
 }
 
 interface FavoriteChat {
   user_query: string;
   chat_id: number;
+}
+
+interface FavoriteItem {
+  id: number;
+  user_query: string;
+  session_id: string;
 }
 
 export default function ChatHistory({
@@ -53,7 +58,7 @@ export default function ChatHistory({
   const [showFavorites, setShowFavorites] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
-  const [favoriteChats, setFavoriteChats] = useState<ChatHistoryItem[]>([]);
+  const [favoriteChats, setFavoriteChats] = useState<FavoriteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
@@ -84,16 +89,10 @@ export default function ChatHistory({
 
     setLoading(true);
     try {
-      const result = await getChatList();
+      const result = await getChatHistory();
 
       if (result.success && result.data) {
-        // Map new API response to existing format
-        const formattedHistory = result.data.results.map((chat) => ({
-          id: chat.id,
-          user_query: chat.text,
-          session_id: chat.session.toString(),
-        }));
-        setChatHistory(formattedHistory);
+        setChatHistory(result.data.chat_history);
       } else {
         console.error('Failed to fetch chat history:', result.error);
       }
@@ -160,13 +159,12 @@ export default function ChatHistory({
   };
 
   const handleSelectChat = (sessionId: string) => {
-    fetchChatHistory();
     onSelectChat(sessionId);
   };
 
   // Filter chats based on search query
   const filteredChats = chatHistory.filter((chat) =>
-    chat.user_query.toLowerCase().includes(searchQuery.toLowerCase())
+    chat.search_query.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleDelete = async (chatSessionId: string) => {
@@ -199,7 +197,7 @@ export default function ChatHistory({
 
   const renderChatItem = (chat: ChatHistoryItem) => (
     <div
-      key={chat.id}
+      key={chat.session_id}
       className={`group relative flex items-center justify-between px-2 mb-1 h-8 cursor-pointer rounded-md hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] ${
         chat.session_id === selectedSessionId
           ? 'bg-[#0000000D] dark:bg-[#FFFFFF0D]'
@@ -208,7 +206,7 @@ export default function ChatHistory({
       onClick={() => handleSelectChat(chat.session_id)}
     >
       <p className='text-sm font-light tracking-[0.005em] truncate flex-grow'>
-        {chat.user_query}
+        {chat.search_query}
       </p>
       <button
         onClick={(e) => handleActions(e, chat.session_id)}

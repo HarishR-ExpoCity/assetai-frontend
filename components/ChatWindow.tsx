@@ -44,27 +44,25 @@ interface Message {
   isFileMessage?: boolean;
 }
 
-interface ChatDetail {
-  request_details: string;
-  response_details: string;
-  chat_id: number;
-  is_favorite: boolean;
-  created_at: string;
+interface ChatDetailRequest {
+  text: string;
+  session_id?: string;
 }
 
-interface ParsedRequestDetails {
-  project_name?: string;
-  file_type?: string;
-  search_query?: string;
-  user_query?: string;
-  file_name?: string;
-  file_path?: string;
-  file_id?: string;
-}
-
-interface ParsedResponseDetails {
+interface ChatDetailResponse {
   response?: string;
-  search_results?: SearchResult[] | [];
+  search_results?: SearchResult[];
+}
+
+interface ChatDetail {
+  id: number;
+  chat_id: number;
+  text: string;
+  created_at: string;
+  request_details: ChatDetailRequest;
+  response_details: ChatDetailResponse;
+  is_favorite: boolean;
+  session: number;
 }
 
 interface RelatedFile {
@@ -211,11 +209,18 @@ export default function ChatWindow({
       console.log(`Fetching chat history for session ID: ${selectedSessionId}`);
       if (isAuthenticated) {
         try {
+          const accessToken = await getValidAccessToken();
+          if (!accessToken) {
+            setLoading(false);
+            return;
+          }
+
           const response = await fetch(
             `${assetaiApiBaseUrl}/chat/history/${selectedSessionId}`,
             {
               headers: {
-                accept: 'application/json',
+                Accept: 'application/json',
+                Authorization: `Bearer ${accessToken}`,
               },
             }
           );
@@ -230,16 +235,12 @@ export default function ChatWindow({
 
             const formattedMessages = chatDetails
               .map((detail: ChatDetail) => {
-                const request: ParsedRequestDetails = JSON.parse(
-                  detail.request_details
-                );
-                const response: ParsedResponseDetails = JSON.parse(
-                  detail.response_details
-                );
+                const request = detail.request_details;
+                const response = detail.response_details;
 
                 const userMessage: Message = {
                   sender: 'User',
-                  content: request.search_query || request.user_query || '',
+                  content: request.text || detail.text || '',
                   timestamp: format(
                     new Date(detail.created_at),
                     'hh:mm a, d MMM'
@@ -247,7 +248,6 @@ export default function ChatWindow({
                   type: 'text',
                   chatId: detail.chat_id,
                   isFavorite: detail.is_favorite,
-                  selectedFileName: request.file_name,
                 };
                 const botResponse: Message = {
                   sender: 'Bot',
@@ -460,8 +460,6 @@ export default function ChatWindow({
                   ),
                   type: response && response?.response ? 'text' : 'file',
                   chatId: detail.chat_id,
-                  selectedFileName: request.file_name,
-                  selectedFilePath: request.file_path,
                 };
 
                 return [userMessage, botResponse];
@@ -484,7 +482,7 @@ export default function ChatWindow({
 
   const handleSendMessage = async (
     messageContent: string,
-    filters: { project: string; fileType: string; count: string }
+    filters: { fileType: string; count: string }
   ) => {
     const userMessage: Message = {
       sender: 'User',
@@ -565,10 +563,12 @@ export default function ChatWindow({
         }
       } else {
         // General chat query - use new /chat/ endpoint
+        // Use selectedSessionId (from history) or chatSessionId (from new chat) for continuation
+        const sessionId = selectedSessionId || chatSessionId;
         const result = await sendChatMessage(
           {
             text: messageContent,
-            ...(chatSessionId && { session_id: chatSessionId }), // Include session_id for continuation
+            ...(sessionId && { session_id: sessionId }),
           },
           abortController.signal
         );
