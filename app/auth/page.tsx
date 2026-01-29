@@ -11,6 +11,7 @@ import MailRoundedIcon from '@mui/icons-material/MailRounded';
 import LockIcon from '@mui/icons-material/Lock';
 import PersonIcon from '@mui/icons-material/Person';
 import { addBasePath } from 'next/dist/client/add-base-path';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/components/auth/auth-provider';
 import { signup, formatApiError } from '@/services/auth-api';
 
@@ -83,6 +84,7 @@ function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { theme, resolvedTheme } = useTheme();
 
   // Get redirect path from query params (set by middleware)
   const redirectPath = searchParams.get('redirect') || '/chat';
@@ -91,6 +93,12 @@ function AuthPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Sync dark mode state with theme
+  useEffect(() => {
+    setIsDarkMode(resolvedTheme === 'dark' || theme === 'dark');
+  }, [theme, resolvedTheme]);
 
   // Redirect if already authenticated (fallback - middleware handles this too)
   useEffect(() => {
@@ -206,7 +214,7 @@ function AuthPageContent() {
           {/* Logo */}
           <div className="flex justify-center py-6">
             <Image
-              src={addBasePath('/icons/logo.svg')}
+              src={isDarkMode ? addBasePath('/icons/logo-dark.svg') : addBasePath('/icons/logo.svg')}
               alt="Asset AI"
               width={0}
               height={0}

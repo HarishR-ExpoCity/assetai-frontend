@@ -18,6 +18,7 @@ import Image from 'next/image';
 import { addBasePath } from 'next/dist/client/add-base-path';
 import { getChatList, deleteChat } from '@/services/chat-api';
 import { getValidAccessToken } from '@/services/auth-api';
+import { useEnvConfig } from '@/context/EnvContext';
 
 interface ChatHistoryProps {
   isCollapsed: boolean;
@@ -30,6 +31,7 @@ interface ChatHistoryProps {
 }
 
 interface ChatHistoryItem {
+  id: number;
   user_query: string;
   session_id: string;
 }
@@ -58,6 +60,7 @@ export default function ChatHistory({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { isAuthenticated } = useAccessToken();
+  const { assetaiApiBaseUrl } = useEnvConfig();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -86,6 +89,7 @@ export default function ChatHistory({
       if (result.success && result.data) {
         // Map new API response to existing format
         const formattedHistory = result.data.results.map((chat) => ({
+          id: chat.id,
           user_query: chat.text,
           session_id: chat.session.toString(),
         }));
@@ -112,7 +116,7 @@ export default function ChatHistory({
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/favorites`,
+        `${assetaiApiBaseUrl}/chat/favorites`,
         {
           headers: {
             Accept: 'application/json',
@@ -124,6 +128,7 @@ export default function ChatHistory({
       const data = await response.json();
       if (response.ok) {
         const favoritesFormatted = data.favorites.map((fav: FavoriteChat) => ({
+          id: fav.chat_id,
           user_query: fav.user_query,
           session_id: fav.chat_id.toString(),
         }));
@@ -138,7 +143,7 @@ export default function ChatHistory({
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, assetaiApiBaseUrl]);
 
   useEffect(() => {
     fetchChatHistory();
@@ -194,7 +199,7 @@ export default function ChatHistory({
 
   const renderChatItem = (chat: ChatHistoryItem) => (
     <div
-      key={chat.session_id}
+      key={chat.id}
       className={`group relative flex items-center justify-between px-2 mb-1 h-8 cursor-pointer rounded-md hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] ${
         chat.session_id === selectedSessionId
           ? 'bg-[#0000000D] dark:bg-[#FFFFFF0D]'
@@ -311,7 +316,7 @@ export default function ChatHistory({
                 ) : favoriteChats.length > 0 ? (
                   favoriteChats.map((chat) => (
                     <div
-                      key={chat.session_id}
+                      key={chat.id}
                       className='flex items-center mb-2 cursor-pointer'
                       onClick={() => handleFavoriteClick(chat.user_query)}
                     >

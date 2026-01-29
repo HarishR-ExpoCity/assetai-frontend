@@ -3,7 +3,9 @@
  * Handles authentication-related API calls (signup, login, etc.)
  */
 
-const AUTH_API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL || '';
+import { env } from 'next-runtime-env';
+
+const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = 'access_token';
@@ -145,7 +147,7 @@ export function isTokenExpired(token: string): boolean {
  */
 export async function signup(data: SignupRequest): Promise<ApiResult<SignupResponse>> {
   try {
-    const response = await fetch(`${AUTH_API_BASE_URL}/signup/`, {
+    const response = await fetch(`${getBaseUrl()}/signup/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -214,7 +216,7 @@ export function formatApiError(error: ApiError): string {
  */
 export async function login(data: LoginRequest): Promise<ApiResult<LoginResponse>> {
   try {
-    const response = await fetch(`${AUTH_API_BASE_URL}/api/token/`, {
+    const response = await fetch(`${getBaseUrl()}/api/token/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -278,7 +280,7 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
   }
 
   try {
-    const response = await fetch(`${AUTH_API_BASE_URL}/api/token/refresh/`, {
+    const response = await fetch(`${getBaseUrl()}/api/token/refresh/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

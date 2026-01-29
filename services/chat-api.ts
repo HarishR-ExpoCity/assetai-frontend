@@ -3,9 +3,10 @@
  * Handles chat-related API calls
  */
 
+import { env } from 'next-runtime-env';
 import { getValidAccessToken } from './auth-api';
 
-const CHAT_API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL || '';
+const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
 // ============ Interfaces ============
 
@@ -62,7 +63,7 @@ export async function sendChatMessage(
       };
     }
 
-    const response = await fetch(`${CHAT_API_BASE_URL}/chat/`, {
+    const response = await fetch(`${getBaseUrl()}/chat/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -115,7 +116,7 @@ export async function getChatList(): Promise<ChatApiResult<ChatListResponse>> {
       };
     }
 
-    const response = await fetch(`${CHAT_API_BASE_URL}/chat/`, {
+    const response = await fetch(`${getBaseUrl()}/chat/`, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -159,7 +160,7 @@ export async function deleteChat(chatId: string | number): Promise<ChatApiResult
       };
     }
 
-    const response = await fetch(`${CHAT_API_BASE_URL}/chat/${chatId}/`, {
+    const response = await fetch(`${getBaseUrl()}/chat/${chatId}/`, {
       method: 'DELETE',
       headers: {
         Accept: 'application/json',

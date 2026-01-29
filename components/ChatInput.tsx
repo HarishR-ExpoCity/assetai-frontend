@@ -21,6 +21,7 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
 import { useAccessToken } from "@/hooks/useAccessToken";
+import { useEnvConfig } from "@/context/EnvContext";
 
 interface ChatInputProps {
   onSendMessage: (
@@ -45,17 +46,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onTyping,
 }) => {
   const [inputValue, setInputValue] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [projectOptions, setProjectOptions] = useState<string[]>([]);
   const [fileTypes, setFileTypes] = useState<string[]>([]);
-
-  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { isAuthenticated } = useAccessToken();
+  const { assetaiApiBaseUrl } = useEnvConfig();
 
   // Initial filter state with no filters applied
   const defaultFilters = {
@@ -85,44 +83,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }, [initialQuery]);
 
   useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/suggestions`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-
-          const data = await response.json();
-          if (response.status === 400) {
-            return { error: data.detail };
-          } else if (!response.ok) {
-            throw new Error(
-              `Error fetching the suggestions: ${response.statusText}`
-            );
-          } else if (response.ok) {
-            setSuggestions(data.suggestions || []);
-          }
-        } catch (error) {
-          console.error("Failed to fetch suggestions:", error);
-        }
-      }
-    };
-
-    fetchSuggestions(); // Fetch suggestions on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
-
-  useEffect(() => {
     const fetchProjects = async () => {
       if (isAuthenticated) {
         try {
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/projects`,
+            `${assetaiApiBaseUrl}/chat/projects`,
             {
               headers: {
                 Accept: "application/json",
@@ -160,7 +125,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (isAuthenticated) {
         try {
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/file_types`,
+            `${assetaiApiBaseUrl}/chat/file_types`,
             {
               headers: {
                 Accept: "application/json",
@@ -187,35 +152,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInputValue(value);
-
-    if (value.trim().length > 2) {
-      setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-    }
+    setInputValue(e.target.value);
     onTyping();
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
-    setShowSuggestions(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -223,7 +162,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (inputValue.trim()) {
       onSendMessage(inputValue, filters);
       setInputValue("");
-      setShowSuggestions(false);
     }
   };
 
@@ -405,40 +343,21 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </PopoverContent>
         </Popover>
 
-        {/* Input and Suggestions */}
+        {/* Input */}
         <div className="relative flex-grow">
           <form onSubmit={handleSubmit} className="flex items-center space-x-2">
-            <div className="relative flex-grow" ref={inputRef}>
-              <Input
-                id="chat-query-input"
-                name="chat-query"
-                type="text"
-                placeholder="Type your query..."
-                className="header-tabs flex-grow border-input h-12 dark:text-white dark:border-[#FFFFFF26]"
-                value={inputValue}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyPress}
-                disabled={isDisabled}
-              />
-
-              {/* Suggestions Dropdown Above the Input */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div
-                  ref={suggestionsRef}
-                  className="absolute bottom-full mb-2 z-10 w-full bg-white dark:bg-popover border dark:border-none dark:border-gray-700 rounded-lg shadow-md"
-                >
-                  {suggestions.map((suggestion, index) => (
-                    <div
-                      key={index}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className="text-base font-light px-4 py-2 cursor-pointer text-gray-400 dark:text-white hover:bg-gray-100 dark:hover:bg-[#FFFFFF0D] rounded-md"
-                    >
-                      {suggestion}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Input
+              id="chat-query-input"
+              name="chat-query"
+              type="text"
+              placeholder="Type your query..."
+              className="header-tabs flex-grow border-input h-12 dark:text-white dark:border-[#FFFFFF26]"
+              value={inputValue}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyPress}
+              disabled={isDisabled}
+              ref={inputRef}
+            />
 
             <Button
               type="submit"

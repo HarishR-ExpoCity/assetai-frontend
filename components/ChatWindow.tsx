@@ -23,6 +23,7 @@ import { useAccessToken } from './../hooks/useAccessToken';
 import { addBasePath } from 'next/dist/client/add-base-path';
 import { sendChatMessage } from '@/services/chat-api';
 import { getValidAccessToken } from '@/services/auth-api';
+import { useEnvConfig } from '@/context/EnvContext';
 
 interface FileMessageContent {
   fileName: string;
@@ -115,6 +116,7 @@ export default function ChatWindow({
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const { isAuthenticated } = useAccessToken();
+  const { assetaiApiBaseUrl } = useEnvConfig();
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -210,7 +212,7 @@ export default function ChatWindow({
       if (isAuthenticated) {
         try {
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/history/${selectedSessionId}`,
+            `${assetaiApiBaseUrl}/chat/history/${selectedSessionId}`,
             {
               headers: {
                 accept: 'application/json',
@@ -523,7 +525,7 @@ export default function ChatWindow({
         }
 
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/search/sources`,
+          `${assetaiApiBaseUrl}/search/sources`,
           {
             method: 'POST',
             headers: {
@@ -637,8 +639,8 @@ export default function ChatWindow({
     }
     // Decide which API endpoint to call based on current favorite status
     const apiUrl = isFavorite
-      ? `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/${chatId}/unfavorite`
-      : `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/${chatId}/favorite`;
+      ? `${assetaiApiBaseUrl}/chat/${chatId}/unfavorite`
+      : `${assetaiApiBaseUrl}/chat/${chatId}/favorite`;
     if (isAuthenticated) {
       try {
         const response = await fetch(apiUrl, {
