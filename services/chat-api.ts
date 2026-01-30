@@ -1,10 +1,10 @@
 /**
  * Chat API Service
- * Handles chat-related API calls
+ * Handles chat-related API calls with automatic 401 retry
  */
 
 import { env } from 'next-runtime-env';
-import { getValidAccessToken } from './auth-api';
+import { authFetch, getValidAccessToken, refreshAccessToken } from './auth-api';
 
 const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
@@ -14,6 +14,7 @@ export interface ChatRequest {
   text: string;
   name?: string; // Optional chat name
   session_id?: string; // Session ID for continuing a conversation
+  file_type?: string; // File type filter
 }
 
 export interface ChatResponse {
@@ -111,27 +112,17 @@ export interface ChatHistoryResponse {
 
 /**
  * Send a chat message (non-streaming)
+ * Uses authFetch for automatic 401 retry with token refresh
  */
 export async function sendChatMessage(
   request: ChatRequest,
   signal?: AbortSignal
 ): Promise<ChatApiResult<ChatResponse>> {
   try {
-    const accessToken = await getValidAccessToken();
-
-    if (!accessToken) {
-      return {
-        success: false,
-        error: 'Not authenticated. Please log in again.',
-      };
-    }
-
-    const response = await fetch(`${getBaseUrl()}/chat/`, {
+    const response = await authFetch(`${getBaseUrl()}/chat/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify(request),
       signal,
@@ -168,11 +159,26 @@ export async function sendChatMessage(
 /**
  * Send a chat message with streaming response
  * Returns a ReadableStream reader for processing chunks
+ * Includes 401 retry with token refresh
  */
 export async function sendChatMessageStream(
   request: ChatRequest,
   signal?: AbortSignal
 ): Promise<StreamChatResult> {
+  // Inner function to perform the actual request
+  const performRequest = async (token: string): Promise<Response> => {
+    return fetch(`${getBaseUrl()}/chat/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(request),
+      signal,
+    });
+  };
+
   try {
     const accessToken = await getValidAccessToken();
 
@@ -183,16 +189,22 @@ export async function sendChatMessageStream(
       };
     }
 
-    const response = await fetch(`${getBaseUrl()}/chat/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(request),
-      signal,
-    });
+    let response = await performRequest(accessToken);
+
+    // If 401, attempt token refresh and retry once
+    if (response.status === 401) {
+      const refreshResult = await refreshAccessToken();
+
+      if (refreshResult.success && refreshResult.data) {
+        // Retry with new token
+        response = await performRequest(refreshResult.data.access);
+      } else {
+        return {
+          success: false,
+          error: 'Session expired. Please log in again.',
+        };
+      }
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -257,24 +269,12 @@ export function parseStreamEvent(line: string): StreamEvent | null {
 
 /**
  * Get chat history
+ * Uses authFetch for automatic 401 retry with token refresh
  */
 export async function getChatHistory(): Promise<ChatApiResult<ChatHistoryResponse>> {
   try {
-    const accessToken = await getValidAccessToken();
-
-    if (!accessToken) {
-      return {
-        success: false,
-        error: 'Not authenticated. Please log in again.',
-      };
-    }
-
-    const response = await fetch(`${getBaseUrl()}/chat/history/`, {
+    const response = await authFetch(`${getBaseUrl()}/chat/history/`, {
       method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
     });
 
     const responseData = await response.json();
@@ -301,24 +301,12 @@ export async function getChatHistory(): Promise<ChatApiResult<ChatHistoryRespons
 
 /**
  * Delete a chat session by session ID
+ * Uses authFetch for automatic 401 retry with token refresh
  */
 export async function deleteChat(sessionId: string): Promise<ChatApiResult<void>> {
   try {
-    const accessToken = await getValidAccessToken();
-
-    if (!accessToken) {
-      return {
-        success: false,
-        error: 'Not authenticated. Please log in again.',
-      };
-    }
-
-    const response = await fetch(`${getBaseUrl()}/session/${sessionId}/`, {
+    const response = await authFetch(`${getBaseUrl()}/session/${sessionId}/`, {
       method: 'DELETE',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
     });
 
     if (!response.ok) {

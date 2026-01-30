@@ -1,23 +1,23 @@
 // JWT-based authentication
 import {
   getAccessToken,
-  isTokenExpired,
   hasStoredTokens,
   getStoredEmail,
   clearTokens,
 } from '@/services/auth-api';
 
-export interface User {
+export type User = {
   email: string;
-}
+};
 
-export interface AuthState {
+export type AuthState = {
   isAuthenticated: boolean;
   user: User | null;
-}
+};
 
 /**
- * Get user info from stored data (does not check expiry - use for sync checks only)
+ * Get user info from stored data
+ * Note: This doesn't validate token - use silentRefresh for validation
  */
 export function getUserFromToken(): User | null {
   const token = getAccessToken();
@@ -30,16 +30,8 @@ export function getUserFromToken(): User | null {
 }
 
 /**
- * Check if access token is expired
- */
-export function isAccessTokenExpired(): boolean {
-  const token = getAccessToken();
-  if (!token) return true;
-  return isTokenExpired(token);
-}
-
-/**
  * Get stored auth state from tokens
+ * Note: This doesn't validate tokens - use silentRefresh for validation
  */
 export function getStoredAuth(): AuthState {
   if (typeof window === 'undefined') {

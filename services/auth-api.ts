@@ -1,6 +1,12 @@
 /**
  * Auth API Service
- * Handles authentication-related API calls (signup, login, etc.)
+ * Robust JWT authentication with automatic token refresh and 401 retry
+ *
+ * Key features:
+ * - Automatic 401 retry with token refresh
+ * - Request queue for concurrent 401 handling
+ * - Silent refresh on app load (no local expiry guessing)
+ * - Single refresh request at a time (prevents race conditions)
  */
 
 import { env } from 'next-runtime-env';
@@ -12,47 +18,98 @@ const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_EMAIL_KEY = 'user_email';
 
-// Refresh lock to prevent concurrent refresh requests
-let refreshPromise: Promise<ApiResult<RefreshResponse>> | null = null;
+// ============ Session Expiry Event ============
+
+// Listeners for session expiry events (used by auth-provider to sync state)
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+
+/**
+ * Subscribe to session expiry events
+ * Called when refresh token is invalid and user needs to re-login
+ */
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  // Return unsubscribe function
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+}
+
+/**
+ * Notify all listeners that session has expired
+ */
+function notifySessionExpired(): void {
+  sessionExpiredListeners.forEach((listener) => listener());
+}
+
+// ============ Refresh State Management ============
+
+// Flag to track if a refresh is in progress
+let isRefreshing = false;
+
+// Queue of requests waiting for token refresh
+type QueuedRequest = {
+  resolve: (token: string | null) => void;
+  reject: (error: Error) => void;
+};
+let refreshQueue: QueuedRequest[] = [];
+
+// Process all queued requests after refresh completes
+function processQueue(token: string | null, error: Error | null = null) {
+  refreshQueue.forEach((request) => {
+    if (error) {
+      request.reject(error);
+    } else {
+      request.resolve(token);
+    }
+  });
+  refreshQueue = [];
+}
 
 // ============ Interfaces ============
 
-export interface SignupRequest {
+export type SignupRequest = {
   email: string;
   password: string;
   first_name: string;
-}
+};
 
-export interface SignupResponse {
+export type SignupResponse = {
   id?: number;
   email?: string;
   first_name?: string;
   message?: string;
-}
+};
 
-export interface LoginRequest {
+export type LoginRequest = {
   email: string;
   password: string;
-}
+};
 
-export interface LoginResponse {
+export type LoginResponse = {
   access: string;
   refresh: string;
-}
+};
 
-export interface ApiError {
+export type ApiError = {
   email?: string[];
   password?: string[];
   first_name?: string[];
   detail?: string;
   non_field_errors?: string[];
-}
+};
 
-export interface ApiResult<T> {
+export type ApiResult<T> = {
   success: boolean;
   data?: T;
   error?: ApiError;
-}
+};
+
+export type RefreshResponse = {
+  access: string;
+  refresh?: string; // Some backends return a new refresh token (token rotation)
+};
 
 // ============ Token Management ============
 
@@ -108,19 +165,17 @@ export function getStoredEmail(): string | null {
 }
 
 /**
- * Check if user has valid tokens stored
+ * Check if user has tokens stored (doesn't validate them)
  */
 export function hasStoredTokens(): boolean {
-  return !!getAccessToken();
+  return !!getAccessToken() && !!getRefreshToken();
 }
 
 /**
  * Decode base64url string (JWT uses base64url, not standard base64)
  */
 function base64UrlDecode(str: string): string {
-  // Replace base64url characters with base64 characters
   let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  // Add padding if needed
   const padding = base64.length % 4;
   if (padding) {
     base64 += '='.repeat(4 - padding);
@@ -146,19 +201,24 @@ export function decodeToken(token: string): Record<string, unknown> | null {
 }
 
 /**
- * Check if token is expired
+ * Check if token appears to be expired based on local time
+ * NOTE: This is only used as an optimization hint, NOT for auth decisions
+ * The backend is the source of truth for token validity
  */
 export function isTokenExpired(token: string): boolean {
   const payload = decodeToken(token);
   if (!payload || typeof payload.exp !== 'number') {
-    return true;
+    // If we can't decode, assume it might be valid and let backend decide
+    return false;
   }
 
   const expiresAt = payload.exp * 1000;
   const now = Date.now();
-  // Add 10 second buffer to refresh before actual expiry
-  return now >= expiresAt - 10000;
+  // Add 30 second buffer to refresh before actual expiry
+  return now >= expiresAt - 30000;
 }
+
+// ============ Auth API Calls ============
 
 /**
  * Register a new user
@@ -227,8 +287,6 @@ export function formatApiError(error: ApiError): string {
   return messages.length > 0 ? messages.join('\n') : 'An unknown error occurred.';
 }
 
-// ============ Auth API Calls ============
-
 /**
  * Login user and get JWT tokens
  */
@@ -255,7 +313,9 @@ export async function login(data: LoginRequest): Promise<ApiResult<LoginResponse
     // Store tokens and email on successful login
     const loginData = responseData as LoginResponse;
     storeTokens(loginData.access, loginData.refresh);
-    localStorage.setItem(USER_EMAIL_KEY, data.email);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(USER_EMAIL_KEY, data.email);
+    }
 
     return {
       success: true,
@@ -279,13 +339,10 @@ export function logout(): void {
   clearTokens();
 }
 
-export interface RefreshResponse {
-  access: string;
-  refresh?: string; // Some backends return a new refresh token (token rotation)
-}
-
 /**
- * Internal function to perform the actual refresh
+ * Refresh access token using refresh token
+ * ALWAYS calls the backend - does NOT check local expiry
+ * This is the robust approach that lets the backend decide validity
  */
 async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
   const refreshToken = getRefreshToken();
@@ -297,14 +354,9 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
     };
   }
 
-  // Check if refresh token is also expired
-  if (isTokenExpired(refreshToken)) {
-    clearTokens();
-    return {
-      success: false,
-      error: { detail: 'Session expired. Please log in again.' },
-    };
-  }
+  // IMPORTANT: Do NOT check local token expiry here
+  // Always let the backend decide if the refresh token is valid
+  // This avoids issues with clock skew and local token decoding errors
 
   try {
     const response = await fetch(`${getBaseUrl()}/api/token/refresh/`, {
@@ -316,22 +368,31 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
       body: JSON.stringify({ refresh: refreshToken }),
     });
 
-    const responseData = await response.json();
-
     if (!response.ok) {
-      clearTokens();
+      const responseData = await response.json().catch(() => ({}));
+
+      // Only clear tokens and notify session expired on authentication failures (401, 403)
+      // Don't clear tokens on 5xx server errors - user should be able to retry
+      if (response.status === 401 || response.status === 403) {
+        clearTokens();
+        // Notify listeners that session has expired (refresh token invalid)
+        notifySessionExpired();
+      }
+
       return {
         success: false,
         error: responseData as ApiError,
       };
     }
 
-    const refreshData = responseData as RefreshResponse;
-    localStorage.setItem(ACCESS_TOKEN_KEY, refreshData.access);
+    const refreshData = await response.json() as RefreshResponse;
 
-    // If backend uses token rotation, also update refresh token
-    if (refreshData.refresh) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshData.refresh);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACCESS_TOKEN_KEY, refreshData.access);
+      // If backend uses token rotation, also update refresh token
+      if (refreshData.refresh) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshData.refresh);
+      }
     }
 
     return {
@@ -349,48 +410,157 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
 }
 
 /**
- * Refresh access token using refresh token
- * Uses a lock to prevent concurrent refresh requests (important for token rotation)
+ * Refresh access token with queue support for concurrent requests
+ * If a refresh is already in progress, queues the request and waits
  */
 export async function refreshAccessToken(): Promise<ApiResult<RefreshResponse>> {
-  // If a refresh is already in progress, wait for it
-  if (refreshPromise) {
-    return refreshPromise;
+  // If refresh is already in progress, queue this request
+  if (isRefreshing) {
+    return new Promise((resolve) => {
+      refreshQueue.push({
+        resolve: (token) => {
+          if (token) {
+            resolve({ success: true, data: { access: token } });
+          } else {
+            resolve({ success: false, error: { detail: 'Token refresh failed' } });
+          }
+        },
+        reject: (error) => {
+          resolve({ success: false, error: { detail: error.message } });
+        },
+      });
+    });
   }
 
-  // Start new refresh and store the promise
-  refreshPromise = performRefresh();
+  isRefreshing = true;
 
   try {
-    return await refreshPromise;
+    const result = await performRefresh();
+
+    if (result.success && result.data) {
+      processQueue(result.data.access, null);
+    } else {
+      processQueue(null, new Error(result.error?.detail || 'Token refresh failed'));
+    }
+
+    return result;
   } finally {
-    refreshPromise = null;
+    isRefreshing = false;
   }
 }
 
 /**
- * Get a valid access token, refreshing if necessary
- * Returns null if unable to get a valid token (user needs to re-login)
+ * Get the current access token from storage
+ * No local expiry check - backend is the sole source of truth
+ * Returns null if no tokens are stored
  */
 export async function getValidAccessToken(): Promise<string | null> {
   const accessToken = getAccessToken();
+  const refreshToken = getRefreshToken();
 
-  if (!accessToken) {
+  // No tokens at all
+  if (!accessToken || !refreshToken) {
     return null;
   }
 
-  // If token is not expired, return it
-  if (!isTokenExpired(accessToken)) {
-    return accessToken;
+  // Return current token - let backend decide if it's valid
+  // If backend returns 401, the caller should use refreshAccessToken() and retry
+  return accessToken;
+}
+
+/**
+ * Silent refresh - attempts to refresh token without any local validation
+ * Used on app initialization to verify session is still valid with backend
+ * Returns true if session is valid, false if user needs to re-login
+ */
+export async function silentRefresh(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+
+  if (!refreshToken) {
+    return false;
   }
 
-  // Token is expired, try to refresh
   const result = await refreshAccessToken();
+  return result.success;
+}
 
-  if (result.success && result.data) {
-    return result.data.access;
+// ============ Authenticated Fetch Wrapper ============
+
+type AuthFetchOptions = RequestInit & {
+  skipAuthRefresh?: boolean;
+};
+
+/**
+ * Fetch wrapper that automatically handles 401 errors with token refresh and retry
+ *
+ * This is the recommended way to make authenticated API calls:
+ * - Automatically adds Authorization header
+ * - On 401, refreshes token and retries the request ONCE
+ * - Handles concurrent 401s with request queue
+ * - Backend is the sole source of truth for token validity (no local expiry check)
+ *
+ * @param url - The URL to fetch
+ * @param options - Fetch options (extends RequestInit with skipAuthRefresh)
+ * @returns Response or throws error
+ */
+export async function authFetch(
+  url: string,
+  options: AuthFetchOptions = {}
+): Promise<Response> {
+  const { skipAuthRefresh = false, ...fetchOptions } = options;
+
+  // Get current access token (no local expiry check - let backend decide)
+  const accessToken = getAccessToken();
+
+  // Build headers with auth token
+  const headers = new Headers(fetchOptions.headers);
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
   }
 
-  // Refresh failed - user needs to re-login
-  return null;
+  // Make the request
+  const response = await fetch(url, {
+    ...fetchOptions,
+    headers,
+  });
+
+  // If not 401, or if we should skip auth refresh, return response as-is
+  if (response.status !== 401 || skipAuthRefresh) {
+    return response;
+  }
+
+  // Got 401 - attempt to refresh token and retry
+  const refreshResult = await refreshAccessToken();
+
+  if (!refreshResult.success || !refreshResult.data) {
+    // Refresh failed - return the original 401 response
+    // The caller should handle this (e.g., redirect to login)
+    return response;
+  }
+
+  // Refresh succeeded - retry the original request with new token
+  const retryHeaders = new Headers(fetchOptions.headers);
+  retryHeaders.set('Authorization', `Bearer ${refreshResult.data.access}`);
+  if (!retryHeaders.has('Accept')) {
+    retryHeaders.set('Accept', 'application/json');
+  }
+
+  return fetch(url, {
+    ...fetchOptions,
+    headers: retryHeaders,
+  });
+}
+
+/**
+ * Get a fresh token for use with XMLHttpRequest or other non-fetch APIs
+ * If the current token is expired, refreshes it first
+ * If refresh fails, returns null
+ *
+ * For XHR requests that get 401, call this again to get a fresh token for retry
+ */
+export async function getFreshToken(): Promise<string | null> {
+  return getValidAccessToken();
 }

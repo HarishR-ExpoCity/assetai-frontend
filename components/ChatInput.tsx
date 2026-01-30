@@ -20,16 +20,16 @@ import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
-import { useAccessToken } from "@/hooks/useAccessToken";
-import { useEnvConfig } from "@/context/EnvContext";
+
+const FILE_TYPES = ["csv", "txt", "doc", "docx", "pdf", "image"];
 
 interface ChatInputProps {
   onSendMessage: (
     messageContent: string,
-    filters: { fileType: string; count: string; }
+    filters: { fileType: string }
   ) => void;
   isDisabled: boolean;
-  selectedFile: { fileName: string; fileId: number; filePath: string; } | null;
+  selectedFile: { fileName: string; fileId: number; filePath: string } | null;
   onClearSelectedFile: () => void;
   resetFilters: boolean;
   onTyping: () => void;
@@ -45,16 +45,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const [inputValue, setInputValue] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [fileTypes, setFileTypes] = useState<string[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { isAuthenticated } = useAccessToken();
-  const { assetaiApiBaseUrl } = useEnvConfig();
-
   // Initial filter state with no filters applied
   const defaultFilters = {
-    count: "",
     fileType: "",
   };
 
@@ -71,38 +66,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetFilters]);
-
-  useEffect(() => {
-    const fetchFileTypes = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await fetch(
-            `${assetaiApiBaseUrl}/chat/file_types`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-
-          const data = await response.json();
-          if (response.status === 400) {
-            return { error: data.detail };
-          } else if (!response.ok) {
-            throw new Error(
-              `Failed to fetch file types: ${response.statusText}`
-            );
-          } else if (response.ok) {
-            setFileTypes(data.file_types);
-          }
-        } catch (err) {
-          console.error("Error fetching file types:", err);
-        }
-      }
-    };
-    fetchFileTypes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -147,19 +110,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     <div className="flex flex-col mt-2 space-y-2 relative">
       {/* Filter Selections Display */}
       <div className="flex space-x-1 items-center text-sm ls">
-        {filters.count && (
-          <div className="bg-[#0000000D] dark:bg-stone-600 dark:text-[#FFFFFFD9] px-3 rounded-md flex items-center space-x-2">
-            <span>Top {filters.count}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleRemoveFilter("count")}
-              className="text-gray-500 dark:text-white px-1 hover:bg-transparent"
-            >
-              <CancelRoundedIcon fontSize="small" />
-            </Button>
-          </div>
-        )}
         {filters.fileType && (
           <div className="bg-[#0000000D] dark:bg-stone-600 dark:text-[#FFFFFFD9] px-3 rounded-md flex items-center space-x-2">
             <span>{filters.fileType}</span>
@@ -213,46 +163,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
             className="p-4 w-auto min-w-52"
           >
             <div className="space-y-4">
-              <div>
-                <Select
-                  onValueChange={(value) =>
-                    handleTempFilterChange("count", value)
-                  }
-                  value={tempFilters.count || undefined}
-                >
-                  <SelectTrigger className="w-full mt-1">
-                    <SelectValue placeholder="Count" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">Top 10</SelectItem>
-                    <SelectItem value="20">Top 20</SelectItem>
-                    <SelectItem value="50">Top 50</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Select
-                  onValueChange={(value) =>
-                    handleTempFilterChange("fileType", value)
-                  }
-                  value={tempFilters.fileType || undefined}
-                >
-                  <SelectTrigger className="w-full mt-1">
-                    <SelectValue placeholder="File Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fileTypes.map((fileType) => (
-                      <SelectItem key={fileType} value={fileType}>
-                        {fileType}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select
+                onValueChange={(value) =>
+                  handleTempFilterChange("fileType", value)
+                }
+                value={tempFilters.fileType || undefined}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="File Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FILE_TYPES.map((fileType) => (
+                    <SelectItem key={fileType} value={fileType}>
+                      {fileType}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <Button
-                className="text-base font-semibold bg-[#0000000D] dark:bg-[#FFFFFF0D] w-full mt-4"
+                className="text-base font-semibold bg-[#0000000D] dark:bg-[#FFFFFF0D] w-full"
                 variant="ghost"
                 onClick={applyFilters}
               >

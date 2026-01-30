@@ -31,7 +31,15 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { getFilesList, mapFileStatus, FileItem, FileStatus } from '@/services/files-api';
+import { getFilesList, mapFileStatus, deleteFile, FileItem, FileStatus } from '@/services/files-api';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function FileManagementPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -42,6 +50,9 @@ export default function FileManagementPage() {
   const [isLoadingFiles, setIsLoadingFiles] = useState(true);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     const result = await getFilesList();
@@ -155,6 +166,32 @@ export default function FileManagementPage() {
   const handlePreviewClose = () => {
     setIsPreviewOpen(false);
     setPreviewFile(null);
+  };
+
+  const handleDeleteClick = (file: FileItem) => {
+    setFileToDelete(file);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!fileToDelete) return;
+
+    setIsDeleting(true);
+    const result = await deleteFile(fileToDelete.file_id);
+    setIsDeleting(false);
+
+    if (result.success) {
+      setFilesList((prev) => prev.filter((f) => f.id !== fileToDelete.id));
+      setIsDeleteDialogOpen(false);
+      setFileToDelete(null);
+    } else {
+      console.error('Failed to delete file:', result.error);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setIsDeleteDialogOpen(false);
+    setFileToDelete(null);
   };
 
   if (isLoading) {
@@ -290,7 +327,10 @@ export default function FileManagementPage() {
                                     />
                                     Download
                                   </button>
-                                  <button className='flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent cursor-pointer text-red-500'>
+                                  <button
+                                    onClick={() => handleDeleteClick(file)}
+                                    className='flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent cursor-pointer text-red-500'
+                                  >
                                     <DeleteRoundedIcon
                                       className='mr-2'
                                       style={{ fontSize: 16 }}
@@ -317,6 +357,41 @@ export default function FileManagementPage() {
         isOpen={isPreviewOpen}
         onClose={handlePreviewClose}
       />
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className='sm:max-w-md dark:bg-[#222222]'>
+          <DialogHeader>
+            <DialogTitle className='text-[#000000D9] dark:text-[#FFFFFFD9] font-semibold text-lg'>
+              Delete file?
+            </DialogTitle>
+            <DialogDescription className='text-[#000000D9] dark:text-[#FFFFFFD9] text-base font-light'>
+              This will delete{' '}
+              <span className='font-semibold'>{fileToDelete?.filename}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className='sm:justify-end'>
+            <div className='flex gap-2 mt-4'>
+              <Button
+                variant='ghost'
+                onClick={handleDeleteCancel}
+                disabled={isDeleting}
+                className='flex-1 bg-[#0000000d] dark:bg-[#FFFFFF0D] text-[#222222] dark:text-white px-4 py-1 cursor-pointer'
+              >
+                Cancel
+              </Button>
+              <Button
+                type='button'
+                variant='destructive'
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className='bg-[#D75C5C] hover:bg-[#D75C5C]/90 dark:text-[#222222] px-4 py-1 font-semibold cursor-pointer'
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

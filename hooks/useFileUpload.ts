@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { getValidAccessToken } from '@/services/auth-api';
+import { getValidAccessToken, refreshAccessToken } from '@/services/auth-api';
 
 // ============ Types ============
 
@@ -43,113 +43,156 @@ export function useFileUpload(options: UploadOptions) {
     setFiles(prev => prev.map(f => (f.id === id ? { ...f, ...updates } : f)));
   }, []);
 
-  // Upload a single file using XMLHttpRequest for progress tracking
+  /**
+   * Upload a single file using XMLHttpRequest with 401 retry support
+   *
+   * If the upload fails with 401:
+   * 1. Refresh the access token
+   * 2. Retry the upload with the new token
+   * 3. Only fail if refresh also fails
+   */
   const uploadFile = useCallback(
     async (item: FileUploadItem): Promise<FileUploadItem> => {
       const abortController = new AbortController();
       abortControllersRef.current.set(item.id, abortController);
 
-      return new Promise((resolve) => {
-        const xhr = new XMLHttpRequest();
+      // Inner function to perform the actual upload
+      const performUpload = (token: string | null, isRetry = false): Promise<FileUploadItem> => {
+        return new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
 
-        // Track upload progress
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable) {
-            const progress = Math.round((event.loaded / event.total) * 100);
-            updateFile(item.id, { progress });
-          }
-        });
-
-        // Handle completion
-        xhr.addEventListener('load', () => {
-          abortControllersRef.current.delete(item.id);
-
-          if (xhr.status >= 200 && xhr.status < 300) {
-            let response: unknown;
-            try {
-              response = JSON.parse(xhr.responseText);
-            } catch {
-              response = xhr.responseText;
+          // Track upload progress
+          xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable) {
+              const progress = Math.round((event.loaded / event.total) * 100);
+              updateFile(item.id, { progress });
             }
+          });
 
-            const updatedItem: FileUploadItem = {
-              ...item,
-              status: 'success',
-              progress: 100,
-              response,
-            };
-            updateFile(item.id, { status: 'success', progress: 100, response });
-            resolve(updatedItem);
-          } else {
-            let errorMessage = 'Upload failed';
-            try {
-              const errorResponse = JSON.parse(xhr.responseText);
-              errorMessage = errorResponse.detail || errorResponse.message || errorMessage;
-            } catch {
-              errorMessage = xhr.statusText || errorMessage;
+          // Handle completion
+          xhr.addEventListener('load', async () => {
+            abortControllersRef.current.delete(item.id);
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              // Success
+              let response: unknown;
+              try {
+                response = JSON.parse(xhr.responseText);
+              } catch {
+                response = xhr.responseText;
+              }
+
+              const updatedItem: FileUploadItem = {
+                ...item,
+                status: 'success',
+                progress: 100,
+                response,
+              };
+              updateFile(item.id, { status: 'success', progress: 100, response });
+              resolve(updatedItem);
+            } else if (xhr.status === 401 && !isRetry) {
+              // Got 401 and this is not a retry - attempt token refresh and retry
+              const refreshResult = await refreshAccessToken();
+
+              if (refreshResult.success && refreshResult.data) {
+                // Refresh succeeded - retry the upload
+                updateFile(item.id, { progress: 0 }); // Reset progress for retry
+                const retryResult = await performUpload(refreshResult.data.access, true);
+                resolve(retryResult);
+              } else {
+                // Refresh failed - report auth error
+                const updatedItem: FileUploadItem = {
+                  ...item,
+                  status: 'error',
+                  error: 'Session expired. Please log in again.',
+                };
+                updateFile(item.id, { status: 'error', error: 'Session expired. Please log in again.' });
+                resolve(updatedItem);
+              }
+            } else {
+              // Other error or 401 on retry
+              let errorMessage = 'Upload failed';
+              try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                errorMessage = errorResponse.detail || errorResponse.message || errorMessage;
+              } catch {
+                errorMessage = xhr.statusText || errorMessage;
+              }
+
+              // Special message for auth errors
+              if (xhr.status === 401) {
+                errorMessage = 'Session expired. Please log in again.';
+              }
+
+              const updatedItem: FileUploadItem = {
+                ...item,
+                status: 'error',
+                error: errorMessage,
+              };
+              updateFile(item.id, { status: 'error', error: errorMessage });
+              resolve(updatedItem);
             }
+          });
 
+          // Handle network errors
+          xhr.addEventListener('error', () => {
+            abortControllersRef.current.delete(item.id);
             const updatedItem: FileUploadItem = {
               ...item,
               status: 'error',
-              error: errorMessage,
+              error: 'Network error',
             };
-            updateFile(item.id, { status: 'error', error: errorMessage });
+            updateFile(item.id, { status: 'error', error: 'Network error' });
             resolve(updatedItem);
-          }
-        });
+          });
 
-        // Handle network errors
-        xhr.addEventListener('error', () => {
-          abortControllersRef.current.delete(item.id);
-          const updatedItem: FileUploadItem = {
-            ...item,
-            status: 'error',
-            error: 'Network error',
-          };
-          updateFile(item.id, { status: 'error', error: 'Network error' });
-          resolve(updatedItem);
-        });
+          // Handle abort
+          xhr.addEventListener('abort', () => {
+            abortControllersRef.current.delete(item.id);
+            const updatedItem: FileUploadItem = {
+              ...item,
+              status: 'error',
+              error: 'Upload cancelled',
+            };
+            updateFile(item.id, { status: 'error', error: 'Upload cancelled' });
+            resolve(updatedItem);
+          });
 
-        // Handle abort
-        xhr.addEventListener('abort', () => {
-          abortControllersRef.current.delete(item.id);
-          const updatedItem: FileUploadItem = {
-            ...item,
-            status: 'error',
-            error: 'Upload cancelled',
-          };
-          updateFile(item.id, { status: 'error', error: 'Upload cancelled' });
-          resolve(updatedItem);
-        });
+          // Listen to abort signal
+          abortController.signal.addEventListener('abort', () => {
+            xhr.abort();
+          });
 
-        // Listen to abort signal
-        abortController.signal.addEventListener('abort', () => {
-          xhr.abort();
-        });
+          // Prepare and send request
+          const formData = new FormData();
+          formData.append('file', item.file);
 
-        // Prepare and send request
-        const formData = new FormData();
-        formData.append('file', item.file);
+          xhr.open('POST', url);
 
-        xhr.open('POST', url);
-
-        // Get access token and set authorization header
-        getValidAccessToken().then((token) => {
+          // Set authorization header if we have a token
           if (token) {
             xhr.setRequestHeader('Authorization', `Bearer ${token}`);
           }
+
           xhr.send(formData);
-        }).catch(() => {
-          const updatedItem: FileUploadItem = {
-            ...item,
-            status: 'error',
-            error: 'Authentication failed',
-          };
-          updateFile(item.id, { status: 'error', error: 'Authentication failed' });
-          resolve(updatedItem);
         });
-      });
+      };
+
+      // Get a fresh token and start the upload
+      const token = await getValidAccessToken();
+
+      if (!token) {
+        // No valid token available - can't proceed
+        const updatedItem: FileUploadItem = {
+          ...item,
+          status: 'error',
+          error: 'Not authenticated. Please log in.',
+        };
+        updateFile(item.id, { status: 'error', error: 'Not authenticated. Please log in.' });
+        return updatedItem;
+      }
+
+      return performUpload(token, false);
     },
     [url, updateFile]
   );

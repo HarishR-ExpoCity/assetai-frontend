@@ -1,10 +1,10 @@
 /**
  * Files API Service
- * Handles file-related API calls
+ * Handles file-related API calls with automatic 401 retry
  */
 
 import { env } from 'next-runtime-env';
-import { getValidAccessToken } from './auth-api';
+import { authFetch } from './auth-api';
 
 const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
@@ -55,24 +55,12 @@ export function mapFileStatus(file: FileItem): FileStatus {
 
 /**
  * Get list of uploaded files
+ * Uses authFetch for automatic 401 retry with token refresh
  */
 export async function getFilesList(): Promise<FilesApiResult<FileItem[]>> {
   try {
-    const accessToken = await getValidAccessToken();
-
-    if (!accessToken) {
-      return {
-        success: false,
-        error: 'Not authenticated. Please log in again.',
-      };
-    }
-
-    const response = await fetch(`${getBaseUrl()}/files/list`, {
+    const response = await authFetch(`${getBaseUrl()}/files/list`, {
       method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
     });
 
     const responseData = await response.json();
@@ -91,6 +79,36 @@ export async function getFilesList(): Promise<FilesApiResult<FileItem[]>> {
     };
   } catch (error) {
     console.error('Files list API error:', error);
+    return {
+      success: false,
+      error: 'Network error. Please check your connection and try again.',
+    };
+  }
+}
+
+/**
+ * Delete a file by file_id (UUID)
+ * Uses authFetch for automatic 401 retry with token refresh
+ */
+export async function deleteFile(fileId: string): Promise<FilesApiResult<void>> {
+  try {
+    const response = await authFetch(`${getBaseUrl()}/files/file/${fileId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const responseData = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        error: responseData.detail || 'Failed to delete file',
+      };
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Delete file API error:', error);
     return {
       success: false,
       error: 'Network error. Please check your connection and try again.',

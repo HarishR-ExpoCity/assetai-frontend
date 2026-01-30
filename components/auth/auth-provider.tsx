@@ -1,15 +1,26 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { AuthState, getStoredAuth, clearStoredAuth, getUserFromToken, isAccessTokenExpired } from './auth';
-import { login as apiLogin, logout as apiLogout, LoginRequest, ApiResult, LoginResponse, refreshAccessToken, hasStoredTokens, clearTokens } from '@/services/auth-api';
+import { AuthState, getStoredAuth, clearStoredAuth, getUserFromToken } from './auth';
+import { useRouter } from 'next/navigation';
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  LoginRequest,
+  ApiResult,
+  LoginResponse,
+  silentRefresh,
+  hasStoredTokens,
+  clearTokens,
+  onSessionExpired,
+} from '@/services/auth-api';
 
-interface AuthContextType extends AuthState {
+type AuthContextType = AuthState & {
   login: (email: string, password: string) => Promise<ApiResult<LoginResponse>>;
   logout: () => void;
   handleSessionExpired: () => void;
   isLoading: boolean;
-}
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -21,41 +32,59 @@ export const useAuth = () => {
   return context;
 };
 
-interface AuthProviderProps {
+type AuthProviderProps = {
   children: ReactNode;
-}
+};
 
 export default function AuthProvider({ children }: AuthProviderProps) {
+  const router = useRouter();
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     user: null,
   });
   const [isLoading, setIsLoading] = useState(true);
 
+  // Subscribe to session expiry events from API layer
+  // When refresh token is rejected, redirect user to login
   useEffect(() => {
-    // Check for existing session on mount
-    const initAuth = async () => {
-      const hasTokens = hasStoredTokens();
+    const unsubscribe = onSessionExpired(() => {
+      setAuthState({ isAuthenticated: false, user: null });
+      router.push('/auth');
+    });
 
-      if (!hasTokens) {
+    return unsubscribe;
+  }, [router]);
+
+  useEffect(() => {
+    /**
+     * Initialize auth on app load using silent refresh
+     *
+     * Key principle: Let the backend decide if tokens are valid
+     * - Don't rely on local token expiry checks for auth decisions
+     * - Always call the refresh endpoint to verify session with backend
+     * - This handles clock skew, token decoding issues, and ensures consistency
+     */
+    const initAuth = async () => {
+      // No tokens stored at all - user is definitely not logged in
+      if (!hasStoredTokens()) {
         setAuthState({ isAuthenticated: false, user: null });
         setIsLoading(false);
         return;
       }
 
-      const tokenExpired = isAccessTokenExpired();
+      // Tokens exist - verify with backend via silent refresh
+      // This ALWAYS calls the backend, never relies on local token validation
+      const isValid = await silentRefresh();
 
-      if (tokenExpired) {
-        const result = await refreshAccessToken();
-
-        if (!result.success) {
-          clearTokens();
-          setAuthState({ isAuthenticated: false, user: null });
-          setIsLoading(false);
-          return;
-        }
+      if (!isValid) {
+        // Backend rejected the refresh token - session is invalid
+        clearTokens();
+        setAuthState({ isAuthenticated: false, user: null });
+        setIsLoading(false);
+        return;
       }
 
+      // Session is valid - get user info from refreshed token
       const stored = getStoredAuth();
       setAuthState(stored);
       setIsLoading(false);
@@ -83,7 +112,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     setAuthState({ isAuthenticated: false, user: null });
   }, []);
 
-  // Called when an API call detects session has expired (e.g., getValidAccessToken returns null)
+  // Called when an API call detects session has expired (e.g., 401 after refresh failed)
   const handleSessionExpired = useCallback(() => {
     clearTokens();
     setAuthState({ isAuthenticated: false, user: null });

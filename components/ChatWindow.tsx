@@ -823,7 +823,7 @@ export default function ChatWindow({
 
   const handleSendMessage = async (
     messageContent: string,
-    filters: { fileType: string; count: string },
+    filters: { fileType: string },
   ) => {
     const userMessage: Message = {
       sender: 'User',
@@ -876,7 +876,7 @@ export default function ChatWindow({
             file_name: selectedFile.fileName,
             session_id: selectedSessionId ? selectedSessionId : sessionId,
             user_query: messageContent,
-            results: filters.count ? filters.count : '10',
+            results: '10',
           }),
           signal: abortController.signal,
         });
@@ -903,13 +903,12 @@ export default function ChatWindow({
         // General chat query - use streaming /chat/ endpoint
         // Use selectedSessionId (from history) or chatSessionId (from new chat) for continuation
         const currentSessionId = selectedSessionId || chatSessionId;
-        const result = await sendChatMessageStream(
-          {
-            text: messageContent,
-            ...(currentSessionId && { session_id: currentSessionId }),
-          },
-          abortController.signal,
-        );
+        const chatPayload = {
+          text: messageContent,
+          ...(currentSessionId && { session_id: currentSessionId }),
+          ...(filters.fileType && { file_type: filters.fileType }),
+        };
+        const result = await sendChatMessageStream(chatPayload, abortController.signal);
 
         if (result.success && result.reader) {
           await processStreamResponse(result.reader);
