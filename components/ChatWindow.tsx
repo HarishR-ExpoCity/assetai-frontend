@@ -26,6 +26,7 @@ import {
 } from '@/services/chat-api';
 import { getValidAccessToken } from '@/services/auth-api';
 import { useEnvConfig } from '@/context/EnvContext';
+import { toast } from 'sonner';
 
 interface FileMessageContent {
   fileName: string;
@@ -489,6 +490,11 @@ export default function ChatWindow({
       console.error('[Stream] Error processing stream:', error);
       if (error instanceof Error && error.name !== 'AbortError') {
         const isTimeout = error.message?.includes('Stream timeout');
+        if (isTimeout) {
+          toast.error('Response timed out. Please try again.');
+        } else {
+          toast.error('An error occurred while processing the response.');
+        }
         setMessages((prevMessages) => [
           ...prevMessages,
           {
@@ -850,6 +856,7 @@ export default function ChatWindow({
         // File-specific query - use existing /search/sources endpoint for now
         const accessToken = await getValidAccessToken();
         if (!accessToken) {
+          toast.error('Session expired. Please log in again.');
           setMessages((prevMessages) => [
             ...prevMessages,
             {
@@ -914,6 +921,7 @@ export default function ChatWindow({
           await processStreamResponse(result.reader);
         } else {
           // Error response
+          toast.error(result.error || 'Failed to send message');
           const errorMessage: Message = {
             sender: 'Bot',
             content:
@@ -930,6 +938,7 @@ export default function ChatWindow({
         console.log('Request aborted');
       } else {
         console.error('Failed to send message:', error);
+        toast.error('Failed to send message');
         setMessages((prevMessages) => [
           ...prevMessages,
           {

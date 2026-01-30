@@ -40,6 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 export default function FileManagementPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -58,6 +59,8 @@ export default function FileManagementPage() {
     const result = await getFilesList();
     if (result.success && result.data) {
       setFilesList(result.data);
+    } else {
+      toast.error(result.error || 'Failed to load files');
     }
     setIsLoadingFiles(false);
   }, []);
@@ -75,7 +78,6 @@ export default function FileManagementPage() {
     maxConcurrent: 3,
     onFileComplete: (file) => {
       if (file.status === 'success') {
-        // Refresh files list when a file is uploaded successfully
         fetchFiles();
       }
     },
@@ -184,8 +186,9 @@ export default function FileManagementPage() {
       setFilesList((prev) => prev.filter((f) => f.id !== fileToDelete.id));
       setIsDeleteDialogOpen(false);
       setFileToDelete(null);
+      toast.success('File deleted successfully');
     } else {
-      console.error('Failed to delete file:', result.error);
+      toast.error(result.error || 'Failed to delete file');
     }
   };
 

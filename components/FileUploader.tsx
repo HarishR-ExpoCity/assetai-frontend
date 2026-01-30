@@ -14,6 +14,7 @@ import {
   Replay as RetryIcon,
 } from '@mui/icons-material';
 import { FileUploadItem } from '@/hooks/useFileUpload';
+import { toast } from 'sonner';
 
 // ============ Types ============
 
@@ -77,10 +78,12 @@ export function FileUploader({
 
       if (rejectedFiles.length > 0) {
         rejectedFiles.forEach(({ file, errors }) => {
-          console.error(
-            `File ${file.name} rejected:`,
-            errors.map((e) => e.message).join(', '),
-          );
+          const isTooLarge = errors.some((e) => e.code === 'file-too-large');
+          if (isTooLarge) {
+            toast.warning(`${file.name} exceeds maximum size`);
+          } else {
+            toast.error(`${file.name}: ${errors.map((e) => e.message).join(', ')}`);
+          }
         });
       }
     },

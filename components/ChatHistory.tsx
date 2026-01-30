@@ -23,6 +23,7 @@ import { useAccessToken } from '@/hooks/useAccessToken';
 import Image from 'next/image';
 import { addBasePath } from 'next/dist/client/add-base-path';
 import { getChatHistory, deleteChat } from '@/services/chat-api';
+import { toast } from 'sonner';
 
 type ChatHistoryProps = {
   isCollapsed: boolean;
@@ -67,10 +68,11 @@ export default function ChatHistory({
       if (result.success && result.data) {
         setChatHistory(result.data.chat_history);
       } else {
-        console.error('Failed to fetch chat history:', result.error);
+        toast.error(result.error || 'Failed to load chat history');
       }
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
+      toast.error('Failed to load chat history');
     } finally {
       setIsLoadingHistory(false);
     }
@@ -106,11 +108,13 @@ export default function ChatHistory({
 
       if (result.success) {
         fetchChatHistory();
+        toast.success('Chat deleted successfully');
       } else {
-        console.error('Delete error:', result.error);
+        toast.error(result.error || 'Failed to delete chat');
       }
     } catch (error) {
       console.error('Failed to delete the chat:', error);
+      toast.error('Failed to delete chat');
     } finally {
       setChatToDelete(null);
       setIsDeleteDialogOpen(false);

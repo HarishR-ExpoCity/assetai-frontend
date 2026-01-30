@@ -14,6 +14,7 @@ import { addBasePath } from 'next/dist/client/add-base-path';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/components/auth/auth-provider';
 import { signup, formatApiError } from '@/services/auth-api';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,12 +126,15 @@ function AuthPageContent() {
       const result = await login(data.email, data.password);
 
       if (result.success) {
+        toast.success('Login successful');
         router.push(redirectPath);
       } else {
+        toast.error('Login failed');
         setError(formatApiError(result.error || { detail: 'Invalid email or password' }));
         setIsLoading(false);
       }
     } catch {
+      toast.error('Login failed');
       setError('Something went wrong. Please try again.');
       setIsLoading(false);
     }
@@ -149,15 +153,18 @@ function AuthPageContent() {
 
       if (result.success) {
         // Signup successful - switch to login mode with success message
+        toast.success('Account created successfully');
         setMode('login');
         setError(null);
         signupForm.reset();
         // Optionally auto-fill email in login form
         loginForm.setValue('email', data.email);
       } else {
+        toast.error('Signup failed');
         setError(formatApiError(result.error || { detail: 'Signup failed' }));
       }
     } catch {
+      toast.error('Signup failed');
       setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);

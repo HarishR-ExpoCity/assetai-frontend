@@ -9,6 +9,7 @@ import AuthProvider from '@/components/auth/auth-provider';
 import { AuthenticationWrapper } from '@/components/auth/AuthenticationWrapper';
 import { MaterialSymbolsFont } from '@/components/MaterialSymbolsFont';
 import { EnvProvider } from '@/context/EnvContext';
+import { Toaster } from 'sonner';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -56,6 +57,7 @@ export default async function RootLayout({
               </AuthenticationWrapper>
             </AuthProvider>
           </EnvProvider>
+          <Toaster position='bottom-right' richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

@@ -13,6 +13,7 @@ import {
   clearTokens,
   onSessionExpired,
 } from '@/services/auth-api';
+import { toast } from 'sonner';
 
 type AuthContextType = AuthState & {
   login: (email: string, password: string) => Promise<ApiResult<LoginResponse>>;
@@ -46,6 +47,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   // When refresh token is rejected, redirect user to login
   useEffect(() => {
     const unsubscribe = onSessionExpired(() => {
+      toast.error('Session expired. Please log in again.');
       setAuthState({ isAuthenticated: false, user: null });
       // Use window.location for guaranteed redirect
       // router.push can fail during in-flight navigations or React batching
@@ -77,8 +79,10 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       const isValid = await silentRefresh();
 
       if (!isValid) {
-        // Backend rejected the refresh token - session is invalid
-        clearTokens();
+        // Refresh failed - could be auth error (401/403) or network/server error
+        // For auth errors, tokens are already cleared in performRefresh()
+        // For network/server errors, we keep tokens so user can retry after page refresh
+        // Either way, we mark as not authenticated for this session
         setAuthState({ isAuthenticated: false, user: null });
         setIsLoading(false);
         return;
@@ -110,6 +114,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     apiLogout();
     clearStoredAuth();
     setAuthState({ isAuthenticated: false, user: null });
+    toast.success('Logged out successfully');
   }, []);
 
   // Called when an API call detects session has expired (e.g., 401 after refresh failed)
