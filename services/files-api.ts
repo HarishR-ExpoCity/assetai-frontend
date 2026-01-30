@@ -10,7 +10,7 @@ const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
 // ============ Types ============
 
-export type FileStatus = 'pending' | 'in_progress' | 'success' | 'failed' | 'retry_scheduled';
+export type FileStatus = 'pending' | 'in_progress' | 'success' | 'failed' | 'archived';
 
 export type FileItem = {
   id: number;
@@ -39,15 +39,34 @@ type FilesApiResult<T> = {
 // ============ Helper ============
 
 /**
- * Map backend file_status to UI status
+ * Map backend vector_status to UI status
+ *
+ * Backend values: in_extraction, in_process, in_embedding, chunked,
+ * partially_processed, fully_embedded, failed, archived
  */
 export function mapFileStatus(file: FileItem): FileStatus {
-  const { file_status } = file;
+  const { vector_status } = file;
 
-  if (file_status === 'success') return 'success';
-  if (file_status === 'failed') return 'failed';
-  if (file_status === 'in_progress') return 'in_progress';
-  if (file_status === 'retry_scheduled') return 'retry_scheduled';
+  // Success - fully processed and ready
+  if (vector_status === 'fully_embedded') return 'success';
+
+  // Failed
+  if (vector_status === 'failed') return 'failed';
+
+  // Archived
+  if (vector_status === 'archived') return 'archived';
+
+  // In progress - various processing stages
+  if (
+    vector_status === 'in_extraction' ||
+    vector_status === 'in_process' ||
+    vector_status === 'in_embedding' ||
+    vector_status === 'chunked' ||
+    vector_status === 'partially_processed'
+  ) {
+    return 'in_progress';
+  }
+
   return 'pending';
 }
 

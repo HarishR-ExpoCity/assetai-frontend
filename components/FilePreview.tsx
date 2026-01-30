@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
@@ -34,7 +35,18 @@ const isPreviewablePdf = (ext: string): boolean => {
 };
 
 const isPreviewableText = (ext: string): boolean => {
-  return ['txt', 'md', 'json', 'xml', 'csv', 'log', 'html', 'css', 'js', 'ts'].includes(ext);
+  return [
+    'txt',
+    'md',
+    'json',
+    'xml',
+    'csv',
+    'log',
+    'html',
+    'css',
+    'js',
+    'ts',
+  ].includes(ext);
 };
 
 export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
@@ -150,7 +162,9 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
               <Skeleton className='h-full w-full rounded-lg' />
             </div>
           )}
-          <div className={`flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900 rounded-lg overflow-auto ${isLoading ? 'invisible' : 'visible'}`}>
+          <div
+            className={`flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900 rounded-lg overflow-auto ${isLoading ? 'invisible' : 'visible'}`}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={file.url}
@@ -207,7 +221,11 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
   useEffect(() => {
     if (file && isOpen) {
       const ext = getFileExtension(file.filename);
-      if (!isPreviewablePdf(ext) && !isPreviewableImage(ext) && !isPreviewableText(ext)) {
+      if (
+        !isPreviewablePdf(ext) &&
+        !isPreviewableImage(ext) &&
+        !isPreviewableText(ext)
+      ) {
         setIsLoading(false);
       }
     }
@@ -224,6 +242,9 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
             <SheetTitle className='truncate max-w-[50vw]'>
               {file?.filename}
             </SheetTitle>
+            <SheetDescription className='sr-only'>
+              Preview of {file?.filename}
+            </SheetDescription>
             <Button
               onClick={handleDownload}
               variant='outline'

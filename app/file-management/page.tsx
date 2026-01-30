@@ -21,7 +21,6 @@ import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import HourglassEmptyRoundedIcon from '@mui/icons-material/HourglassEmptyRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
-import ReplayRoundedIcon from '@mui/icons-material/ReplayRounded';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
@@ -31,7 +30,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { getFilesList, mapFileStatus, deleteFile, FileItem, FileStatus } from '@/services/files-api';
+import {
+  getFilesList,
+  mapFileStatus,
+  deleteFile,
+  FileItem,
+  FileStatus,
+} from '@/services/files-api';
 import {
   Dialog,
   DialogContent,
@@ -122,10 +127,10 @@ export default function FileManagementPage() {
             style={{ fontSize: 16 }}
           />
         );
-      case 'retry_scheduled':
+      case 'archived':
         return (
-          <ReplayRoundedIcon
-            className='text-orange-500'
+          <HourglassEmptyRoundedIcon
+            className='text-gray-400'
             style={{ fontSize: 16 }}
           />
         );
@@ -148,8 +153,8 @@ export default function FileManagementPage() {
         return 'Failed';
       case 'in_progress':
         return 'In Progress';
-      case 'retry_scheduled':
-        return 'Retry Scheduled';
+      case 'archived':
+        return 'Archived';
       case 'pending':
       default:
         return 'Pending';
@@ -271,7 +276,7 @@ export default function FileManagementPage() {
                         <TableHead className='font-semibold'>
                           File Name
                         </TableHead>
-                        <TableHead className='font-semibold w-[150px]'>
+                        <TableHead className='font-semibold w-[150px] text-center'>
                           Status
                         </TableHead>
                         <TableHead className='font-semibold w-[80px] text-center'>
@@ -298,7 +303,7 @@ export default function FileManagementPage() {
                               {file.filename}
                             </TableCell>
                             <TableCell>
-                              <div className='flex items-center gap-2'>
+                              <div className='flex items-center justify-center gap-2'>
                                 {getStatusIcon(status)}
                                 <span className='text-xs'>
                                   {getStatusText(status)}
@@ -389,7 +394,7 @@ export default function FileManagementPage() {
                 disabled={isDeleting}
                 className='bg-[#D75C5C] hover:bg-[#D75C5C]/90 dark:text-[#222222] px-4 py-1 font-semibold cursor-pointer'
               >
-Delete
+                Delete
               </Button>
             </div>
           </DialogFooter>
