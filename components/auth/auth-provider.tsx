@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { AuthState, getStoredAuth, clearStoredAuth, getUserFromToken } from './auth';
-import { useRouter } from 'next/navigation';
 import {
   login as apiLogin,
   logout as apiLogout,
@@ -37,7 +36,6 @@ type AuthProviderProps = {
 };
 
 export default function AuthProvider({ children }: AuthProviderProps) {
-  const router = useRouter();
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     user: null,
@@ -49,11 +47,13 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const unsubscribe = onSessionExpired(() => {
       setAuthState({ isAuthenticated: false, user: null });
-      router.push('/auth');
+      // Use window.location for guaranteed redirect
+      // router.push can fail during in-flight navigations or React batching
+      window.location.href = '/auth';
     });
 
     return unsubscribe;
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     /**

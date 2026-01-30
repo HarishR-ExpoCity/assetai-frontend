@@ -17,14 +17,6 @@ export interface ChatRequest {
   file_type?: string; // File type filter
 }
 
-export interface ChatResponse {
-  id: number;
-  text: string;
-  created_at: string;
-  session: number;
-  session_id: string; // UUID for the chat session
-}
-
 // ============ Streaming Interfaces ============
 
 export type StreamEventType = 'start' | 'chat' | 'sql' | 'end' | 'error';
@@ -109,52 +101,6 @@ export interface ChatHistoryResponse {
 }
 
 // ============ API Calls ============
-
-/**
- * Send a chat message (non-streaming)
- * Uses authFetch for automatic 401 retry with token refresh
- */
-export async function sendChatMessage(
-  request: ChatRequest,
-  signal?: AbortSignal
-): Promise<ChatApiResult<ChatResponse>> {
-  try {
-    const response = await authFetch(`${getBaseUrl()}/chat/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-      signal,
-    });
-
-    const responseData = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: responseData.detail || 'Failed to send message',
-      };
-    }
-
-    return {
-      success: true,
-      data: responseData as ChatResponse,
-    };
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return {
-        success: false,
-        error: 'Request cancelled',
-      };
-    }
-    console.error('Chat API error:', error);
-    return {
-      success: false,
-      error: 'Network error. Please check your connection and try again.',
-    };
-  }
-}
 
 /**
  * Send a chat message with streaming response

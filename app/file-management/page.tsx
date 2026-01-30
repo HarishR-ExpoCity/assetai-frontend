@@ -386,7 +386,7 @@ export default function FileManagementPage() {
                 disabled={isDeleting}
                 className='bg-[#D75C5C] hover:bg-[#D75C5C]/90 dark:text-[#222222] px-4 py-1 font-semibold cursor-pointer'
               >
-                {isDeleting ? 'Deleting...' : 'Delete'}
+Delete
               </Button>
             </div>
           </DialogFooter>
