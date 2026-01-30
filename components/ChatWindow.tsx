@@ -16,8 +16,6 @@ import {
 import { SquarePen } from 'lucide-react';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
-import StarRoundedIcon from '@mui/icons-material/StarRounded';
-import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
 import { useAccessToken } from './../hooks/useAccessToken';
 import { addBasePath } from 'next/dist/client/add-base-path';
 import { sendChatMessage } from '@/services/chat-api';
@@ -37,7 +35,6 @@ interface Message {
   type?: 'text' | 'file';
   loading?: boolean;
   chatId?: number;
-  isFavorite?: boolean;
   selectedFileName?: string;
   selectedFilePath?: string;
   isFileMessage?: boolean;
@@ -88,16 +85,12 @@ interface SearchResult {
 
 interface ChatWindowProps {
   selectedSessionId?: string;
-  onFavoriteStatusChange: () => void;
   onNewChat: () => void;
-  initialQuery?: string;
 }
 
 export default function ChatWindow({
   selectedSessionId,
-  onFavoriteStatusChange,
   onNewChat,
-  initialQuery,
 }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string>(uuidv4());
@@ -236,7 +229,6 @@ export default function ChatWindow({
                   ),
                   type: 'text',
                   chatId: detail.chat_id,
-                  isFavorite: detail.is_favorite,
                 };
                 const botResponse: Message = {
                   sender: 'Bot',
@@ -576,13 +568,12 @@ export default function ChatWindow({
             timestamp: format(new Date(), 'hh:mm a, d MMM'),
             type: 'text',
             chatId: result.data.id,
-            isFavorite: false,
           };
           setMessages((prevMessages) => {
             // Update user message with chatId
             const updatedMessages = prevMessages.map((msg, idx) =>
               idx === prevMessages.length - 1
-                ? { ...msg, chatId: result.data!.id, isFavorite: false }
+                ? { ...msg, chatId: result.data!.id }
                 : msg
             );
             return [...updatedMessages, botResponse];
@@ -617,52 +608,6 @@ export default function ChatWindow({
       abortControllerRef.current = null;
       setLoading(false);
       scrollToBottom();
-    }
-  };
-
-  const handleFavoriteToggle = async (
-    chatId: number | undefined,
-    isFavorite: boolean
-  ) => {
-    if (!chatId) {
-      console.error('No chat ID provided for favorite toggle.');
-      return;
-    }
-    // Decide which API endpoint to call based on current favorite status
-    const apiUrl = isFavorite
-      ? `${assetaiApiBaseUrl}/chat/${chatId}/unfavorite`
-      : `${assetaiApiBaseUrl}/chat/${chatId}/favorite`;
-    if (isAuthenticated) {
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            accept: 'application/json',
-          },
-        });
-        if (response.ok) {
-          // Update the message in the state with the new favorite status
-          setMessages((prevMessages) =>
-            prevMessages.map((msg) =>
-              msg.chatId === chatId
-                ? { ...msg, isFavorite: !msg.isFavorite }
-                : msg
-            )
-          );
-          onFavoriteStatusChange();
-        } else if (response.status === 400) {
-          return { error: 'Bad request' };
-        } else if (!response.ok) {
-          throw new Error(
-            `Error fetching favorite chats: ${response.statusText}`
-          );
-        }
-      } catch (error) {
-        console.error(
-          `Failed to toggle favorite status for chat ID ${chatId}:`,
-          error
-        );
-      }
     }
   };
 
@@ -733,26 +678,6 @@ export default function ChatWindow({
             }`}
           >
             <div className='flex items-center max-w-[80%]'>
-              {message.sender === 'User' &&
-                message.chatId &&
-                !message.selectedFileName && (
-                  <button
-                    className='mr-2 -mt-5'
-                    onClick={() =>
-                      handleFavoriteToggle(
-                        message.chatId,
-                        message.isFavorite || false
-                      )
-                    }
-                  >
-                    {message.isFavorite ? (
-                      <StarRoundedIcon className='text-[#FFCD00]' />
-                    ) : (
-                      <StarBorderRoundedIcon />
-                    )}
-                  </button>
-                )}
-
               <div
                 className={`flex flex-col ${
                   message.sender === 'User' ? 'items-end' : 'items-start'
@@ -832,7 +757,6 @@ export default function ChatWindow({
         selectedFile={selectedFile}
         onClearSelectedFile={handleClearSelectedFile}
         resetFilters={filterResetTrigger}
-        initialQuery={initialQuery}
         onTyping={scrollToBottom}
       />
     </div>

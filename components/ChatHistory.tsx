@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -18,23 +17,18 @@ import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import ArrowForwardIosRoundedIcon from '@mui/icons-material/ArrowForwardIosRounded';
 import ArrowBackIosRoundedIcon from '@mui/icons-material/ArrowBackIosRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
-import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useAccessToken } from '@/hooks/useAccessToken';
 import Image from 'next/image';
 import { addBasePath } from 'next/dist/client/add-base-path';
 import { getChatHistory, deleteChat } from '@/services/chat-api';
-import { getValidAccessToken } from '@/services/auth-api';
-import { useEnvConfig } from '@/context/EnvContext';
 
 type ChatHistoryProps = {
   isCollapsed: boolean;
   onToggleSidebar: () => void;
   onSelectChat: (sessionId: string) => void;
-  favoriteStatusChanged: boolean;
   refreshHistory: boolean;
-  onFavoriteClick: (query: string) => void;
   selectedSessionId?: string;
 };
 
@@ -43,42 +37,22 @@ type ChatHistoryItem = {
   session_id: string;
 };
 
-type FavoriteChat = {
-  user_query: string;
-  chat_id: number;
-};
-
-type FavoriteItem = {
-  id: number;
-  user_query: string;
-  session_id: string;
-};
-
 export default function ChatHistory({
   isCollapsed,
   onToggleSidebar,
   onSelectChat,
-  favoriteStatusChanged,
   refreshHistory,
-  onFavoriteClick,
   selectedSessionId,
 }: ChatHistoryProps) {
-  const [showFavorites, setShowFavorites] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
-  const [favoriteChats, setFavoriteChats] = useState<FavoriteItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [isLoadingFavorites, setIsLoadingFavorites] = useState(true);
 
   // Delete confirmation dialog state
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Combined loading state
-  const loading = isLoadingHistory || isLoadingFavorites;
-
   const { isAuthenticated } = useAccessToken();
-  const { assetaiApiBaseUrl } = useEnvConfig();
 
   const fetchChatHistory = useCallback(async () => {
     if (!isAuthenticated) {
@@ -102,56 +76,9 @@ export default function ChatHistory({
     }
   }, [isAuthenticated]);
 
-  const fetchFavoriteChats = useCallback(async () => {
-    if (!isAuthenticated) {
-      setIsLoadingFavorites(false);
-      return;
-    }
-
-    setIsLoadingFavorites(true);
-    try {
-      const accessToken = await getValidAccessToken();
-      if (!accessToken) {
-        setIsLoadingFavorites(false);
-        return;
-      }
-
-      const response = await fetch(`${assetaiApiBaseUrl}/chat/favorites`, {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        const favoritesFormatted = data.favorites.map((fav: FavoriteChat) => ({
-          id: fav.chat_id,
-          user_query: fav.user_query,
-          session_id: fav.chat_id.toString(),
-        }));
-        setFavoriteChats(favoritesFormatted);
-      } else {
-        throw new Error(
-          `Error fetching favorite chats: ${response.statusText}`,
-        );
-      }
-    } catch (error) {
-      console.error('Failed to fetch favorite chats:', error);
-    } finally {
-      setIsLoadingFavorites(false);
-    }
-  }, [isAuthenticated, assetaiApiBaseUrl]);
-
   useEffect(() => {
     fetchChatHistory();
-    fetchFavoriteChats();
-  }, [
-    fetchChatHistory,
-    fetchFavoriteChats,
-    refreshHistory,
-    favoriteStatusChanged,
-  ]);
+  }, [fetchChatHistory, refreshHistory]);
 
   // Filter chats based on search query
   const filteredChats = useMemo(() => {
@@ -161,10 +88,6 @@ export default function ChatHistory({
       chat.search_query.toLowerCase().includes(query),
     );
   }, [chatHistory, searchQuery]);
-
-  const handleFavoriteClick = (query: string) => {
-    onFavoriteClick(query);
-  };
 
   const handleSelectChat = (sessionId: string) => {
     onSelectChat(sessionId);
@@ -279,16 +202,6 @@ export default function ChatHistory({
         <>
           <div className='flex justify-between items-center mb-3'>
             <h2 className='text-sm font-semibold'>Chat History</h2>
-            {chatHistory.length > 0 && (
-              <div className='text-xs font-normal flex items-center space-x-2'>
-                <span>Favorites</span>
-                <Switch
-                  className='dark:bg-white data-[state=checked]:bg-[#5836F5] dark:data-[state=checked]:bg-[#5836F5] dark:[&_[data-state=checked]]:bg-white'
-                  checked={showFavorites}
-                  onCheckedChange={(checked) => setShowFavorites(checked)}
-                />
-              </div>
-            )}
           </div>
 
           {/* Search Input */}
@@ -311,7 +224,7 @@ export default function ChatHistory({
           </div>
 
           {/* Chat History List */}
-          {loading ? (
+          {isLoadingHistory ? (
             <div className='flex-1 flex items-center justify-center'>
               <div className='flex flex-col gap-2 w-full max-w-xs'>
                 <Skeleton className='h-4 w-full' />
@@ -319,7 +232,7 @@ export default function ChatHistory({
                 <Skeleton className='h-4 w-3/4' />
               </div>
             </div>
-          ) : filteredChats.length === 0 && !showFavorites ? (
+          ) : filteredChats.length === 0 ? (
             <div className='flex-1 flex flex-col items-center justify-center px-4'>
               <Image
                 src={addBasePath('/icons/chat-history.svg')}
@@ -336,39 +249,6 @@ export default function ChatHistory({
           ) : (
             <ScrollArea className='flex-1 -mx-1 px-1 min-h-0'>
               <div className='space-y-1'>
-                {/* Show Favorites when toggle is on */}
-                {showFavorites && favoriteChats.length > 0 && (
-                  <div className='mb-3'>
-                    <h3 className='text-[10px] font-semibold text-[#00000073] dark:text-[#FFFFFF73] uppercase tracking-wider mb-1.5 px-2'>
-                      Favorites
-                    </h3>
-                    {favoriteChats.map((chat) => (
-                      <div
-                        key={chat.id}
-                        role='button'
-                        tabIndex={0}
-                        onClick={() => handleFavoriteClick(chat.user_query)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleFavoriteClick(chat.user_query);
-                          }
-                        }}
-                        className='flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5836F5]'
-                      >
-                        <StarRoundedIcon
-                          className='text-[#FFCD00] flex-shrink-0'
-                          style={{ fontSize: 16 }}
-                        />
-                        <span className='text-xs truncate'>
-                          {chat.user_query}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Previous Chats */}
                 {filteredChats.length > 0 && (
                   <div>
                     <h3 className='text-[10px] font-semibold text-[#00000073] dark:text-[#FFFFFF73] uppercase tracking-wider mb-1.5 px-2'>

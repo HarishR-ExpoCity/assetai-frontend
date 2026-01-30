@@ -32,7 +32,6 @@ interface ChatInputProps {
   selectedFile: { fileName: string; fileId: number; filePath: string; } | null;
   onClearSelectedFile: () => void;
   resetFilters: boolean;
-  initialQuery?: string;
   onTyping: () => void;
 }
 
@@ -42,7 +41,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   selectedFile,
   onClearSelectedFile,
   resetFilters,
-  initialQuery,
   onTyping,
 }) => {
   const [inputValue, setInputValue] = useState("");
@@ -73,12 +71,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetFilters]);
-
-  useEffect(() => {
-    if (initialQuery) {
-      setInputValue(initialQuery);
-    }
-  }, [initialQuery]);
 
   useEffect(() => {
     const fetchFileTypes = async () => {

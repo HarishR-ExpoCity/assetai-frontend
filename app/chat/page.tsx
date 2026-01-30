@@ -13,11 +13,7 @@ export default function ChatPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<
     string | undefined
   >(undefined);
-  const [favoriteStatusChanged, setFavoriteStatusChanged] = useState(false);
   const [refreshHistory, setRefreshHistory] = useState(false);
-  const [initialQuery, setInitialQuery] = useState<string | undefined>(
-    undefined
-  );
 
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -32,19 +28,10 @@ export default function ChatPage() {
     setSelectedSessionId(sessionId);
   };
 
-  const handleFavoriteStatusChange = useCallback(() => {
-    setFavoriteStatusChanged((prev) => !prev);
-  }, []);
-
   const handleNewChat = useCallback(() => {
     setSelectedSessionId(undefined);
-    setInitialQuery(undefined);
     setRefreshHistory((prev) => !prev);
   }, []);
-
-  const handleFavoriteClick = (query: string) => {
-    setInitialQuery(query);
-  };
 
   if (isLoading) {
     return (
@@ -68,9 +55,7 @@ export default function ChatPage() {
         >
           <ChatWindow
             selectedSessionId={selectedSessionId}
-            onFavoriteStatusChange={handleFavoriteStatusChange}
             onNewChat={handleNewChat}
-            initialQuery={initialQuery}
           />
         </div>
         <div
@@ -84,9 +69,7 @@ export default function ChatPage() {
               setChatHistoryCollapsed(!isChatHistoryCollapsed)
             }
             onSelectChat={handleSelectChat}
-            favoriteStatusChanged={favoriteStatusChanged}
             refreshHistory={refreshHistory}
-            onFavoriteClick={handleFavoriteClick}
             selectedSessionId={selectedSessionId}
           />
         </div>

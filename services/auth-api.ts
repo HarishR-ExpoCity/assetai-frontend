@@ -135,14 +135,12 @@ export function decodeToken(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
-      console.warn('[Auth] Invalid JWT format: expected 3 parts');
       return null;
     }
     const payload = parts[1];
     const decoded = base64UrlDecode(payload);
     return JSON.parse(decoded);
-  } catch (error) {
-    console.warn('[Auth] Failed to decode token:', error);
+  } catch {
     return null;
   }
 }
@@ -153,21 +151,13 @@ export function decodeToken(token: string): Record<string, unknown> | null {
 export function isTokenExpired(token: string): boolean {
   const payload = decodeToken(token);
   if (!payload || typeof payload.exp !== 'number') {
-    console.warn('[Auth] Cannot determine token expiry - invalid payload');
     return true;
   }
 
   const expiresAt = payload.exp * 1000;
   const now = Date.now();
   // Add 10 second buffer to refresh before actual expiry
-  const isExpired = now >= expiresAt - 10000;
-
-  if (isExpired) {
-    const expiredAgo = Math.round((now - expiresAt) / 1000);
-    console.log(`[Auth] Access token expired ${expiredAgo}s ago, will refresh`);
-  }
-
-  return isExpired;
+  return now >= expiresAt - 10000;
 }
 
 /**
@@ -301,7 +291,6 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
   const refreshToken = getRefreshToken();
 
   if (!refreshToken) {
-    console.warn('[Auth] No refresh token available');
     return {
       success: false,
       error: { detail: 'No refresh token available' },
@@ -310,7 +299,6 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
 
   // Check if refresh token is also expired
   if (isTokenExpired(refreshToken)) {
-    console.warn('[Auth] Refresh token is expired, user must re-login');
     clearTokens();
     return {
       success: false,
@@ -319,7 +307,6 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
   }
 
   try {
-    console.log('[Auth] Calling refresh endpoint...');
     const response = await fetch(`${getBaseUrl()}/api/token/refresh/`, {
       method: 'POST',
       headers: {
@@ -332,7 +319,6 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
     const responseData = await response.json();
 
     if (!response.ok) {
-      console.warn('[Auth] Refresh endpoint returned error:', response.status, responseData);
       clearTokens();
       return {
         success: false,
@@ -342,20 +328,17 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
 
     const refreshData = responseData as RefreshResponse;
     localStorage.setItem(ACCESS_TOKEN_KEY, refreshData.access);
-    console.log('[Auth] New access token stored');
 
     // If backend uses token rotation, also update refresh token
     if (refreshData.refresh) {
       localStorage.setItem(REFRESH_TOKEN_KEY, refreshData.refresh);
-      console.log('[Auth] New refresh token stored (token rotation)');
     }
 
     return {
       success: true,
       data: refreshData,
     };
-  } catch (error) {
-    console.error('[Auth] Network error during refresh:', error);
+  } catch {
     return {
       success: false,
       error: {
@@ -372,12 +355,10 @@ async function performRefresh(): Promise<ApiResult<RefreshResponse>> {
 export async function refreshAccessToken(): Promise<ApiResult<RefreshResponse>> {
   // If a refresh is already in progress, wait for it
   if (refreshPromise) {
-    console.log('[Auth] Refresh already in progress, waiting for existing request...');
     return refreshPromise;
   }
 
   // Start new refresh and store the promise
-  console.log('[Auth] Starting new refresh request');
   refreshPromise = performRefresh();
 
   try {
@@ -395,7 +376,6 @@ export async function getValidAccessToken(): Promise<string | null> {
   const accessToken = getAccessToken();
 
   if (!accessToken) {
-    console.log('[Auth] No access token found');
     return null;
   }
 
@@ -405,15 +385,12 @@ export async function getValidAccessToken(): Promise<string | null> {
   }
 
   // Token is expired, try to refresh
-  console.log('[Auth] Attempting token refresh...');
   const result = await refreshAccessToken();
 
   if (result.success && result.data) {
-    console.log('[Auth] Token refresh successful');
     return result.data.access;
   }
 
   // Refresh failed - user needs to re-login
-  console.warn('[Auth] Token refresh failed:', result.error);
   return null;
 }
