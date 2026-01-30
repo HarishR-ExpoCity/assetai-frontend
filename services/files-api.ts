@@ -10,7 +10,7 @@ const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
 // ============ Types ============
 
-export type FileStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type FileStatus = 'pending' | 'in_progress' | 'success' | 'failed' | 'retry_scheduled';
 
 export type FileItem = {
   id: number;
@@ -39,14 +39,15 @@ type FilesApiResult<T> = {
 // ============ Helper ============
 
 /**
- * Map backend status to UI status
+ * Map backend file_status to UI status
  */
 export function mapFileStatus(file: FileItem): FileStatus {
-  const { vector_status } = file;
+  const { file_status } = file;
 
-  if (vector_status === 'completed') return 'completed';
-  if (vector_status === 'failed' || vector_status === 'error') return 'failed';
-  if (vector_status === 'in_extraction' || vector_status === 'processing') return 'processing';
+  if (file_status === 'success') return 'success';
+  if (file_status === 'failed') return 'failed';
+  if (file_status === 'in_progress') return 'in_progress';
+  if (file_status === 'retry_scheduled') return 'retry_scheduled';
   return 'pending';
 }
 

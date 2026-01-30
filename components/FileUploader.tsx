@@ -45,11 +45,11 @@ function formatFileSize(bytes: number): string {
 function getStatusIcon(status: FileUploadItem['status']) {
   switch (status) {
     case 'success':
-      return <SuccessIcon className='w-4 h-4 text-green-500' />;
+      return <SuccessIcon className='text-green-500' style={{ fontSize: 16 }} />;
     case 'error':
-      return <ErrorIcon className='w-4 h-4 text-red-500' />;
+      return <ErrorIcon className='text-red-500' style={{ fontSize: 16 }} />;
     default:
-      return <FileIcon className='w-4 h-4 text-gray-400 dark:text-gray-500' />;
+      return <FileIcon className='text-gray-400 dark:text-gray-500' style={{ fontSize: 16 }} />;
   }
 }
 
@@ -224,7 +224,7 @@ export function FileUploader({
                       className='h-8 w-8 p-0'
                       aria-label='Retry upload'
                     >
-                      <RetryIcon className='w-4 h-4' />
+                      <RetryIcon style={{ fontSize: 16 }} />
                     </Button>
                   )}
                   <Button
@@ -234,7 +234,7 @@ export function FileUploader({
                     className='h-8 w-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                     aria-label='Remove file'
                   >
-                    <CloseIcon className='w-4 h-4' />
+                    <CloseIcon style={{ fontSize: 16 }} />
                   </Button>
                 </div>
               </div>

@@ -33,6 +33,10 @@ export default function ChatPage() {
     setRefreshHistory((prev) => !prev);
   }, []);
 
+  const handleRefreshHistory = useCallback(() => {
+    setRefreshHistory((prev) => !prev);
+  }, []);
+
   if (isLoading) {
     return (
       <Layout>
@@ -56,6 +60,7 @@ export default function ChatPage() {
           <ChatWindow
             selectedSessionId={selectedSessionId}
             onNewChat={handleNewChat}
+            onRefreshHistory={handleRefreshHistory}
           />
         </div>
         <div

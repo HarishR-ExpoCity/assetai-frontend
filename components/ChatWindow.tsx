@@ -18,7 +18,12 @@ import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import { useAccessToken } from './../hooks/useAccessToken';
 import { addBasePath } from 'next/dist/client/add-base-path';
-import { sendChatMessage } from '@/services/chat-api';
+import {
+  sendChatMessageStream,
+  parseStreamEvent,
+  type StreamChatEvent,
+  type StreamSqlEvent,
+} from '@/services/chat-api';
 import { getValidAccessToken } from '@/services/auth-api';
 import { useEnvConfig } from '@/context/EnvContext';
 
@@ -86,18 +91,21 @@ interface SearchResult {
 interface ChatWindowProps {
   selectedSessionId?: string;
   onNewChat: () => void;
+  onRefreshHistory?: () => void;
 }
 
 export default function ChatWindow({
   selectedSessionId,
   onNewChat,
+  onRefreshHistory,
 }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string>(uuidv4());
   const [chatSessionId, setChatSessionId] = useState<string | null>(null); // API session_id for continuing conversations
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // For streaming response
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false); // For loading chat history
   const [selectedFile, setSelectedFile] = useState<FileMessageContent | null>(
-    null
+    null,
   );
   const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
   const [filterResetTrigger, setFilterResetTrigger] = useState(false);
@@ -126,7 +134,7 @@ export default function ChatWindow({
         style={{ borderTopColor: 'transparent' }}
       />
       <span className='text-sm text-[#000000] dark:text-[#FFFFFF]'>
-        Processing...
+        We are processing the query...
       </span>
       <Button
         variant='ghost'
@@ -159,6 +167,348 @@ export default function ChatWindow({
     }
   };
 
+  // Stream timeout constant (60 seconds)
+  const STREAM_TIMEOUT_MS = 60000;
+
+  // Helper to render search results as ReactNode
+  const renderSearchResults = (results: SearchResult[]) => {
+    return (
+      <div className='flex flex-col dark:bg-[#FFFFFF0D] dark:text-white bg-[#0000000d] chat-bubble rounded-3xl p-2'>
+        {results.map((result) => (
+          <div
+            key={result.file_id}
+            className='p-4 dark:bg-[#222222] bg-white chat-cluster dark:border-b-[#FFFFFF0D] border-b border-b-[#0000000D]'
+          >
+            <div className='flex justify-between items-center mb-2'>
+              <div className='flex-1 min-w-0 mr-4 text-xs font-semibold tracking-[0.025em] break-all whitespace-pre-wrap'>
+                {result.file_name}
+              </div>
+              <div className='flex items-center gap-2'>
+                {result?.tags?.map((tag, tagIndex) => (
+                  <span
+                    key={`${result.file_id}-tag-${tagIndex}`}
+                    className='px-2 py-1 dark:bg-[#FFFFFF40] bg-[#0000000d] text-[8px] font-semibold leading-[12px] rounded flex items-center justify-center'
+                  >
+                    {tag}
+                  </span>
+                ))}
+                <div className='flex items-center dark:text-white'>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => window.open(result.file_url, '_blank')}
+                        >
+                          {result.file_type === 'pdf' ||
+                          result.file_type === '.pdf' ? (
+                            <Image
+                              src={addBasePath('/icons/pdf.svg')}
+                              alt='PDF'
+                              width={20}
+                              height={20}
+                            />
+                          ) : result.file_type === 'dwg' ||
+                            result.file_type === '.dwg' ? (
+                            <Image
+                              src={addBasePath('/icons/dwg.svg')}
+                              alt='DWG'
+                              width={20}
+                              height={20}
+                            />
+                          ) : result.file_type === 'mht' ||
+                            result.file_type === '.mht' ? (
+                            <Image
+                              src={addBasePath('/icons/mht.svg')}
+                              alt='MHT'
+                              width={20}
+                              height={20}
+                            />
+                          ) : (
+                            <OpenInNewRoundedIcon fontSize='small' />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{result.file_name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          onClick={() =>
+                            handleSelectFile(
+                              result.file_id,
+                              result.file_name,
+                              result.file_path,
+                            )
+                          }
+                          className={`${
+                            selectedFileId === result.file_id
+                              ? 'text-blue-500'
+                              : ''
+                          }`}
+                        >
+                          <CheckCircleOutlineRoundedIcon fontSize='small' />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Select this file</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+            </div>
+            <div className='text-xs font-light tracking-[0.025em] break-all max-w-full whitespace-pre-wrap'>
+              {result.file_path}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Process streaming response from the chat API
+  const processStreamResponse = async (
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+  ) => {
+    let partialData = '';
+    let accumulatedText = '';
+    let chatId: number | undefined = undefined;
+    let newSessionId: string | null = null;
+    let botMessageCreated = false;
+    let contentStarted = false; // Track when content starts arriving to hide loader
+    let timeoutId: NodeJS.Timeout | null = null;
+    const searchResults: SearchResult[] = [];
+
+    // Reuse TextDecoder with stream: true to handle multi-byte UTF-8 characters
+    // that may be split across chunks
+    const decoder = new TextDecoder('utf-8');
+
+    const updateBotMessage = (
+      content: string | React.ReactNode,
+      messageType: 'text' | 'file' = 'text',
+    ) => {
+      setMessages((prevMessages) => {
+        // Find the last bot message in current streaming response (after the last user message)
+        const lastUserIndex = prevMessages
+          .map((m) => m.sender)
+          .lastIndexOf('User');
+        const existingBotMessage = prevMessages
+          .slice(lastUserIndex + 1)
+          .find((m) => m.sender === 'Bot');
+
+        if (existingBotMessage) {
+          // Update existing bot message
+          botMessageCreated = true;
+          return prevMessages.map((msg, idx) =>
+            idx > lastUserIndex && msg.sender === 'Bot'
+              ? {
+                  ...msg,
+                  content,
+                  type: messageType,
+                  chatId: chatId ?? msg.chatId,
+                }
+              : msg,
+          );
+        }
+
+        // Create new bot message
+        botMessageCreated = true;
+        return [
+          ...prevMessages,
+          {
+            sender: 'Bot' as const,
+            content,
+            timestamp: format(new Date(), 'hh:mm a, d MMM'),
+            type: messageType,
+            chatId: chatId ?? undefined,
+          },
+        ];
+      });
+    };
+
+    // Reset timeout on each chunk received
+    const resetTimeout = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        // Cancel the reader if no data received within timeout
+        reader.cancel('Stream timeout - no data received');
+      }, STREAM_TIMEOUT_MS);
+    };
+
+    try {
+      resetTimeout();
+
+      while (true) {
+        const { value, done } = await reader.read();
+
+        if (done) {
+          const finalChunk = decoder.decode(new Uint8Array(), {
+            stream: false,
+          });
+          if (finalChunk) {
+            partialData += finalChunk;
+          }
+          break;
+        }
+
+        resetTimeout();
+
+        const chunk = decoder.decode(value, { stream: true });
+        const completeData = partialData + chunk;
+        const lines = completeData.split('\n');
+
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i];
+          const event = parseStreamEvent(line);
+          if (!event) continue;
+
+          switch (event.type) {
+            case 'start':
+              break;
+
+            case 'chat': {
+              const chatEvent = event as StreamChatEvent;
+              if (chatEvent.data.chat_id) {
+                chatId = chatEvent.data.chat_id;
+                setMessages((prev) =>
+                  prev.map((msg, idx) =>
+                    idx === prev.length - 1 && msg.sender === 'User'
+                      ? { ...msg, chatId }
+                      : msg,
+                  ),
+                );
+              }
+              if (chatEvent.data.session_id) {
+                newSessionId = chatEvent.data.session_id;
+              }
+              if (chatEvent.data.response) {
+                accumulatedText += chatEvent.data.response;
+                updateBotMessage(accumulatedText);
+                // Hide loader once content starts arriving
+                if (!contentStarted) {
+                  contentStarted = true;
+                  setLoading(false);
+                }
+              }
+              break;
+            }
+
+            case 'sql': {
+              const sqlEvent = event as StreamSqlEvent;
+              if (sqlEvent.data.file_name) {
+                const fileId = sqlEvent.data.file_id;
+                const numericFileId =
+                  typeof fileId === 'string'
+                    ? parseInt(fileId, 10) || searchResults.length + 1
+                    : fileId || searchResults.length + 1;
+
+                const result: SearchResult = {
+                  file_id: numericFileId,
+                  file_name: sqlEvent.data.file_name,
+                  file_path: sqlEvent.data.file_path || '',
+                  file_type: sqlEvent.data.file_type || '',
+                  file_url: sqlEvent.data.file_url || '',
+                  project_name: sqlEvent.data.project_name || '',
+                  relevance_score: sqlEvent.data.relevance_score || 0,
+                  comments: sqlEvent.data.comments || '',
+                  tags: sqlEvent.data.tags || [],
+                  related_files: (sqlEvent.data.related_files || []).map(
+                    (rf) => ({
+                      ...rf,
+                      file_pathid: rf.file_pathid || rf.file_path || '',
+                    }),
+                  ) as RelatedFile[],
+                };
+                searchResults.push(result);
+                updateBotMessage(renderSearchResults(searchResults), 'file');
+                // Hide loader once content starts arriving
+                if (!contentStarted) {
+                  contentStarted = true;
+                  setLoading(false);
+                }
+              }
+              break;
+            }
+
+            case 'end':
+              setLoading(false);
+              break;
+
+            case 'error': {
+              const errorMsg =
+                event.data && 'message' in event.data
+                  ? event.data.message
+                  : 'An error occurred';
+              updateBotMessage(errorMsg || 'An error occurred');
+              setLoading(false);
+              break;
+            }
+          }
+        }
+
+        partialData = lines[lines.length - 1];
+      }
+
+      if (partialData.trim()) {
+        const event = parseStreamEvent(partialData);
+        if (event?.type === 'chat') {
+          const chatEvent = event as StreamChatEvent;
+          if (chatEvent.data.response) {
+            accumulatedText += chatEvent.data.response;
+            updateBotMessage(accumulatedText);
+          }
+        }
+      }
+
+      // Update session ID if received from stream, and refresh history for new chats
+      if (newSessionId && !chatSessionId) {
+        setChatSessionId(newSessionId);
+        onRefreshHistory?.();
+      }
+
+      if (!botMessageCreated && searchResults.length === 0) {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            sender: 'Bot',
+            content: 'No documents found. Please try a different query.',
+            timestamp: format(new Date(), 'hh:mm a, d MMM'),
+            type: 'text',
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('[Stream] Error processing stream:', error);
+      if (error instanceof Error && error.name !== 'AbortError') {
+        const isTimeout = error.message?.includes('Stream timeout');
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            sender: 'Bot',
+            content: isTimeout
+              ? 'The response took too long. Please try again.'
+              : 'An error occurred while processing the response.',
+            timestamp: format(new Date(), 'hh:mm a, d MMM'),
+            type: 'text',
+          },
+        ]);
+      }
+    } finally {
+      // Clean up timeout
+      if (timeoutId) clearTimeout(timeoutId);
+      // Release the reader lock to free resources
+      reader.releaseLock();
+    }
+  };
+
   // Reset chat and generate a new session_id
   const resetChat = () => {
     setMessages([]);
@@ -174,7 +524,6 @@ export default function ChatWindow({
     setSessionId(uuidv4());
   }, []);
 
-
   useEffect(() => {
     // Reset API session when switching chats
     setChatSessionId(null);
@@ -186,14 +535,14 @@ export default function ChatWindow({
         return;
       }
 
-      setLoading(true);
+      setIsLoadingHistory(true);
 
       console.log(`Fetching chat history for session ID: ${selectedSessionId}`);
       if (isAuthenticated) {
         try {
           const accessToken = await getValidAccessToken();
           if (!accessToken) {
-            setLoading(false);
+            setIsLoadingHistory(false);
             return;
           }
 
@@ -204,7 +553,7 @@ export default function ChatWindow({
                 Accept: 'application/json',
                 Authorization: `Bearer ${accessToken}`,
               },
-            }
+            },
           );
           const data = await response.json();
           if (response.status == 400) {
@@ -225,7 +574,7 @@ export default function ChatWindow({
                   content: request.text || detail.text || '',
                   timestamp: format(
                     new Date(detail.created_at),
-                    'hh:mm a, d MMM'
+                    'hh:mm a, d MMM',
                   ),
                   type: 'text',
                   chatId: detail.chat_id,
@@ -237,7 +586,7 @@ export default function ChatWindow({
                       response?.response ? (
                         response.response
                       ) : (
-                        <div className='flex flex-col dark:bg-[#FFFFFF0D] dark:text-white bg-[#0000000d] chat-bubble rounded-3xl p-2 max-w-[80%]'>
+                        <div className='flex flex-col dark:bg-[#FFFFFF0D] dark:text-white bg-[#0000000d] chat-bubble rounded-3xl p-2'>
                           {response.search_results &&
                           response.search_results.length > 0 ? (
                             response.search_results?.map(
@@ -247,7 +596,7 @@ export default function ChatWindow({
                                   className='p-4 dark:bg-[#222222] bg-white chat-cluster dark:border-b-[#FFFFFF0D] border-b border-b-[#0000000D]'
                                 >
                                   <div className='flex justify-between items-center mb-2'>
-                                    <div className='flex-1 min-w-0 mr-1 text-xs font-semibold tracking-[0.025em] break-all whitespace-pre-wrap'>
+                                    <div className='flex-1 min-w-0 mr-4 text-xs font-semibold tracking-[0.025em] break-all whitespace-pre-wrap'>
                                       {result.file_name}
                                     </div>
                                     <div className='flex items-center gap-2'>
@@ -268,7 +617,7 @@ export default function ChatWindow({
                                           result.related_files.map(
                                             (
                                               relatedFile: RelatedFile,
-                                              index: number
+                                              index: number,
                                             ) => (
                                               <TooltipProvider
                                                 key={`related-file-tooltip-${index}`}
@@ -282,35 +631,41 @@ export default function ChatWindow({
                                                       onClick={() =>
                                                         window.open(
                                                           relatedFile.file_url,
-                                                          '_blank'
+                                                          '_blank',
                                                         )
                                                       }
                                                     >
                                                       {relatedFile.file_type ===
-                                                      'pdf' ? (
+                                                        'pdf' ||
+                                                      relatedFile.file_type ===
+                                                        '.pdf' ? (
                                                         <Image
                                                           src={addBasePath(
-                                                            '/icons/pdf.svg'
+                                                            '/icons/pdf.svg',
                                                           )}
                                                           alt='PDF'
                                                           width={20}
                                                           height={20}
                                                         />
                                                       ) : relatedFile.file_type ===
-                                                        'dwg' ? (
+                                                          'dwg' ||
+                                                        relatedFile.file_type ===
+                                                          '.dwg' ? (
                                                         <Image
                                                           src={addBasePath(
-                                                            '/icons/dwg.svg'
+                                                            '/icons/dwg.svg',
                                                           )}
                                                           alt='DWG'
                                                           width={20}
                                                           height={20}
                                                         />
                                                       ) : relatedFile.file_type ===
-                                                        'mht' ? (
+                                                          'mht' ||
+                                                        relatedFile.file_type ===
+                                                          '.mht' ? (
                                                         <Image
                                                           src={addBasePath(
-                                                            '/icons/mht.svg'
+                                                            '/icons/mht.svg',
                                                           )}
                                                           alt='MHT'
                                                           width={20}
@@ -328,7 +683,7 @@ export default function ChatWindow({
                                                   </TooltipContent>
                                                 </Tooltip>
                                               </TooltipProvider>
-                                            )
+                                            ),
                                           )}
 
                                         <TooltipProvider>
@@ -340,34 +695,39 @@ export default function ChatWindow({
                                                 onClick={() =>
                                                   window.open(
                                                     result.file_url,
-                                                    '_blank'
+                                                    '_blank',
                                                   )
                                                 }
                                               >
-                                                {result.file_type === 'pdf' ? (
+                                                {result.file_type === 'pdf' ||
+                                                result.file_type === '.pdf' ? (
                                                   <Image
                                                     src={addBasePath(
-                                                      '/icons/pdf.svg'
+                                                      '/icons/pdf.svg',
                                                     )}
                                                     alt='PDF'
                                                     width={20}
                                                     height={20}
                                                   />
                                                 ) : result.file_type ===
-                                                  'dwg' ? (
+                                                    'dwg' ||
+                                                  result.file_type ===
+                                                    '.dwg' ? (
                                                   <Image
                                                     src={addBasePath(
-                                                      '/icons/dwg.svg'
+                                                      '/icons/dwg.svg',
                                                     )}
                                                     alt='DWG'
                                                     width={20}
                                                     height={20}
                                                   />
                                                 ) : result.file_type ===
-                                                  'mht' ? (
+                                                    'mht' ||
+                                                  result.file_type ===
+                                                    '.mht' ? (
                                                   <Image
                                                     src={addBasePath(
-                                                      '/icons/mht.svg'
+                                                      '/icons/mht.svg',
                                                     )}
                                                     alt='MHT'
                                                     width={20}
@@ -394,7 +754,7 @@ export default function ChatWindow({
                                                   handleSelectFile(
                                                     result.file_id,
                                                     result.file_name,
-                                                    result.file_path
+                                                    result.file_path,
                                                   )
                                                 }
                                                 className={`${
@@ -419,7 +779,7 @@ export default function ChatWindow({
                                     {result.file_path}
                                   </div>
                                 </div>
-                              )
+                              ),
                             )
                           ) : (
                             <div className='p-2 text-xs font-normal tracking-[0.025em]'>
@@ -437,7 +797,7 @@ export default function ChatWindow({
                     ),
                   timestamp: format(
                     new Date(detail.created_at),
-                    'hh:mm a, d MMM'
+                    'hh:mm a, d MMM',
                   ),
                   type: response && response?.response ? 'text' : 'file',
                   chatId: detail.chat_id,
@@ -448,11 +808,11 @@ export default function ChatWindow({
               .flat();
 
             setMessages(formattedMessages);
-            setLoading(false);
+            setIsLoadingHistory(false);
           }
         } catch (error) {
           console.error('Error fetching chat history:', error);
-          setLoading(false);
+          setIsLoadingHistory(false);
         }
       }
     };
@@ -463,7 +823,7 @@ export default function ChatWindow({
 
   const handleSendMessage = async (
     messageContent: string,
-    filters: { fileType: string; count: string }
+    filters: { fileType: string; count: string },
   ) => {
     const userMessage: Message = {
       sender: 'User',
@@ -503,26 +863,23 @@ export default function ChatWindow({
           return;
         }
 
-        const response = await fetch(
-          `${assetaiApiBaseUrl}/search/sources`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              file_full_path: selectedFile.filePath,
-              file_id: selectedFile.fileId,
-              file_name: selectedFile.fileName,
-              session_id: selectedSessionId ? selectedSessionId : sessionId,
-              user_query: messageContent,
-              results: filters.count ? filters.count : '10',
-            }),
-            signal: abortController.signal,
-          }
-        );
+        const response = await fetch(`${assetaiApiBaseUrl}/search/sources`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            file_full_path: selectedFile.filePath,
+            file_id: selectedFile.fileId,
+            file_name: selectedFile.fileName,
+            session_id: selectedSessionId ? selectedSessionId : sessionId,
+            user_query: messageContent,
+            results: filters.count ? filters.count : '10',
+          }),
+          signal: abortController.signal,
+        });
 
         if (!response.ok) {
           throw new Error('Failed to fetch response');
@@ -543,46 +900,26 @@ export default function ChatWindow({
           setMessages((prevMessages) => [...prevMessages, botResponse]);
         }
       } else {
-        // General chat query - use new /chat/ endpoint
+        // General chat query - use streaming /chat/ endpoint
         // Use selectedSessionId (from history) or chatSessionId (from new chat) for continuation
-        const sessionId = selectedSessionId || chatSessionId;
-        const result = await sendChatMessage(
+        const currentSessionId = selectedSessionId || chatSessionId;
+        const result = await sendChatMessageStream(
           {
             text: messageContent,
-            ...(sessionId && { session_id: sessionId }),
+            ...(currentSessionId && { session_id: currentSessionId }),
           },
-          abortController.signal
+          abortController.signal,
         );
 
-        if (result.success && result.data) {
-          // Store session_id for subsequent messages
-          // If this is a new chat (no existing chatSessionId), refresh history
-          if (result.data.session_id && !chatSessionId) {
-            setChatSessionId(result.data.session_id);
-            onNewChat(); // Refresh chat history to show the new chat
-          }
-
-          const botResponse: Message = {
-            sender: 'Bot',
-            content: result.data.text,
-            timestamp: format(new Date(), 'hh:mm a, d MMM'),
-            type: 'text',
-            chatId: result.data.id,
-          };
-          setMessages((prevMessages) => {
-            // Update user message with chatId
-            const updatedMessages = prevMessages.map((msg, idx) =>
-              idx === prevMessages.length - 1
-                ? { ...msg, chatId: result.data!.id }
-                : msg
-            );
-            return [...updatedMessages, botResponse];
-          });
+        if (result.success && result.reader) {
+          await processStreamResponse(result.reader);
         } else {
           // Error response
           const errorMessage: Message = {
             sender: 'Bot',
-            content: result.error || 'An error occurred while processing your request.',
+            content:
+              result.error ||
+              'An error occurred while processing your request.',
             timestamp: format(new Date(), 'hh:mm a, d MMM'),
             type: 'text',
           };
@@ -614,7 +951,7 @@ export default function ChatWindow({
   const handleSelectFile = (
     fileId: number | undefined,
     fileName: string,
-    filePath: string
+    filePath: string,
   ) => {
     if (fileId && fileName && filePath) {
       setSelectedFile({ fileId, fileName, filePath });
@@ -652,7 +989,7 @@ export default function ChatWindow({
         className='flex-grow overflow-y-auto pr-2 custom-scrollbar'
         ref={chatContainerRef}
       >
-        {messages.length === 0 && (
+        {messages.length === 0 && !isLoadingHistory && (
           <div className='flex flex-col items-center justify-center h-full text-center'>
             <Image
               src={addBasePath('/icons/chat-icon.svg')}
@@ -667,6 +1004,15 @@ export default function ChatWindow({
             <p className='welcome-text mt-2 max-w-md dark:text-[#FFFFFFA6]'>
               Please enter your search query to find the relevant files!
             </p>
+          </div>
+        )}
+
+        {isLoadingHistory && (
+          <div className='flex items-center justify-center h-full'>
+            <div
+              className='w-8 h-8 border-2 border-[#5836F5] rounded-full animate-spin'
+              style={{ borderTopColor: 'transparent' }}
+            />
           </div>
         )}
 
@@ -714,7 +1060,7 @@ export default function ChatWindow({
                               onClick={() =>
                                 window.open(
                                   `https://expocitydubai.sharepoint.com/sites/AssetInformationLibrary/Docs${message.selectedFilePath}`,
-                                  '_blank'
+                                  '_blank',
                                 )
                               }
                             >
@@ -728,7 +1074,7 @@ export default function ChatWindow({
                     </div>
                   </div>
                 ) : (
-                  <div className={`w-fit`}>{message.content}</div>
+                  <div className='w-full'>{message.content}</div>
                 )}
                 <div className='time-stamp mt-1 dark:text-white'>
                   {message.timestamp}

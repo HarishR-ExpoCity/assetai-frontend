@@ -21,6 +21,7 @@ import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import HourglassEmptyRoundedIcon from '@mui/icons-material/HourglassEmptyRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
+import ReplayRoundedIcon from '@mui/icons-material/ReplayRounded';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
@@ -90,7 +91,7 @@ export default function FileManagementPage() {
 
   const getStatusIcon = (status: FileStatus) => {
     switch (status) {
-      case 'completed':
+      case 'success':
         return (
           <CheckCircleRoundedIcon
             className='text-green-500'
@@ -101,10 +102,17 @@ export default function FileManagementPage() {
         return (
           <ErrorRoundedIcon className='text-red-500' style={{ fontSize: 16 }} />
         );
-      case 'processing':
+      case 'in_progress':
         return (
           <SyncRoundedIcon
             className='text-[#5836F5] animate-spin'
+            style={{ fontSize: 16 }}
+          />
+        );
+      case 'retry_scheduled':
+        return (
+          <ReplayRoundedIcon
+            className='text-orange-500'
             style={{ fontSize: 16 }}
           />
         );
@@ -121,12 +129,14 @@ export default function FileManagementPage() {
 
   const getStatusText = (status: FileStatus) => {
     switch (status) {
-      case 'completed':
-        return 'Completed';
+      case 'success':
+        return 'Success';
       case 'failed':
         return 'Failed';
-      case 'processing':
-        return 'Processing';
+      case 'in_progress':
+        return 'In Progress';
+      case 'retry_scheduled':
+        return 'Retry Scheduled';
       case 'pending':
       default:
         return 'Pending';
