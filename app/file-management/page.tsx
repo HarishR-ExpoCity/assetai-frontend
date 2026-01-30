@@ -97,7 +97,7 @@ export default function FileManagementPage() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/auth');
+      router.replace('/auth');
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -237,6 +237,7 @@ export default function FileManagementPage() {
                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
                     ['.docx'],
                   'text/plain': ['.txt'],
+                  'text/csv': ['.csv'],
                   'image/*': ['.png', '.jpg', '.jpeg', '.gif'],
                 }}
                 maxSize={50 * 1024 * 1024}

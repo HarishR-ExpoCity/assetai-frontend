@@ -14,11 +14,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 import ChatBubbleRoundedIcon from '@mui/icons-material/ChatBubbleRounded';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
@@ -150,23 +149,25 @@ const Header = () => {
                     />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <p>
-                    {isDarkMode
-                      ? 'Switch to light theme'
-                      : 'Switch to dark theme'}
-                  </p>
+                <TooltipContent
+                  side='bottom'
+                  sideOffset={8}
+                  className='bg-[#4A4A4A] text-white dark:bg-primary dark:text-primary-foreground text-xs px-2 py-1'
+                >
+                  {isDarkMode
+                    ? 'Switch to light theme'
+                    : 'Switch to dark theme'}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
-            {/* User Dropdown Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            {/* User Menu */}
+            <Popover>
+              <PopoverTrigger asChild>
                 <Button
                   variant='ghost'
                   size='sm'
-                  className='rounded-lg h-10 w-10 p-0 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:ring-0 focus-visible:ring-0 focus:outline-none focus-visible:outline-none focus:ring-offset-0'
+                  className='rounded-lg h-10 w-10 p-0 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:ring-0 focus-visible:ring-0 focus:outline-none focus-visible:outline-none focus:ring-offset-0 cursor-pointer'
                   aria-label='User menu'
                 >
                   <User
@@ -174,13 +175,10 @@ const Header = () => {
                     className='text-gray-700 dark:text-gray-300'
                   />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className='w-96 p-1' align='end'>
+              </PopoverTrigger>
+              <PopoverContent align='end' className='w-auto p-1'>
                 {/* User name */}
-                <DropdownMenuItem
-                  className='flex items-center cursor-default select-none rounded-sm px-2 py-1.5 outline-none transition-colors focus:bg-transparent data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
-                  disabled
-                >
+                <div className='flex items-center px-2 py-1.5'>
                   <MaterialIcon
                     icon='person'
                     className='text-black dark:text-white mr-2 h-4 w-4 flex-shrink-0'
@@ -189,12 +187,12 @@ const Header = () => {
                   <span className='text-black dark:text-white font-medium text-sm truncate'>
                     {username || 'User'}
                   </span>
-                </DropdownMenuItem>
+                </div>
 
                 {/* Logout */}
-                <DropdownMenuItem
+                <button
                   onClick={handleLogout}
-                  className='text-sm leading-5 flex items-center cursor-pointer select-none rounded-sm px-2 py-1.5 outline-none transition-colors focus:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-[#D75C5C]'
+                  className='w-full flex items-center px-2 py-1.5 text-sm rounded-md hover:bg-accent cursor-pointer text-[#D75C5C]'
                 >
                   <MaterialIcon
                     icon='logout'
@@ -202,9 +200,9 @@ const Header = () => {
                     style={{ fontSize: '16px' }}
                   />
                   <span>Logout</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </button>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </header>

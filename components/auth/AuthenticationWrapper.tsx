@@ -30,8 +30,8 @@ export function AuthenticationWrapper({
       clearTimeout(redirectTimeoutRef.current);
     }
 
-    // Try router.push first
-    router.push('/auth');
+    // Use replace to avoid history manipulation warning
+    router.replace('/auth');
 
     // Fallback: if still on same page after 500ms, force navigation
     redirectTimeoutRef.current = setTimeout(() => {

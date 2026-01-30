@@ -15,7 +15,6 @@ import {
 
 import { SquarePen } from 'lucide-react';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
-import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import { useAccessToken } from './../hooks/useAccessToken';
 import { addBasePath } from 'next/dist/client/add-base-path';
 import {
@@ -108,7 +107,8 @@ export default function ChatWindow({
   const [selectedFile, setSelectedFile] = useState<FileMessageContent | null>(
     null,
   );
-  const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
+  // Commented out - file selection feature disabled for now
+  // const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
   const [filterResetTrigger, setFilterResetTrigger] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -236,38 +236,8 @@ export default function ChatWindow({
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          onClick={() =>
-                            handleSelectFile(
-                              result.file_id,
-                              result.file_name,
-                              result.file_path,
-                            )
-                          }
-                          className={`${
-                            selectedFileId === result.file_id
-                              ? 'text-blue-500'
-                              : ''
-                          }`}
-                        >
-                          <CheckCircleOutlineRoundedIcon fontSize='small' />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Select this file</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
                 </div>
               </div>
-            </div>
-            <div className='text-xs font-light tracking-[0.025em] break-all max-w-full whitespace-pre-wrap'>
-              {result.file_path}
             </div>
           </div>
         ))}
@@ -521,7 +491,6 @@ export default function ChatWindow({
     setSessionId(uuidv4());
     setChatSessionId(null); // Clear API session for new conversation
     setSelectedFile(null);
-    setSelectedFileId(null);
     setFilterResetTrigger((prev) => !prev);
     onNewChat();
   };
@@ -750,39 +719,8 @@ export default function ChatWindow({
                                           </Tooltip>
                                         </TooltipProvider>
 
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant='ghost'
-                                                size='sm'
-                                                onClick={() =>
-                                                  handleSelectFile(
-                                                    result.file_id,
-                                                    result.file_name,
-                                                    result.file_path,
-                                                  )
-                                                }
-                                                className={`${
-                                                  selectedFileId ===
-                                                  result.file_id
-                                                    ? 'text-blue-500'
-                                                    : ''
-                                                }`}
-                                              >
-                                                <CheckCircleOutlineRoundedIcon fontSize='small' />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                              <p>Select this file</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
                                       </div>
                                     </div>
-                                  </div>
-                                  <div className='text-xs font-light tracking-[0.025em] break-all max-w-full whitespace-pre-wrap'>
-                                    {result.file_path}
                                   </div>
                                 </div>
                               ),
@@ -956,22 +894,23 @@ export default function ChatWindow({
     }
   };
 
-  const handleSelectFile = (
-    fileId: number | undefined,
-    fileName: string,
-    filePath: string,
-  ) => {
-    if (fileId && fileName && filePath) {
-      setSelectedFile({ fileId, fileName, filePath });
-      setSelectedFileId(fileId);
-    } else {
-      console.error('Failed to set selected file due to missing data:', {
-        fileId,
-        fileName,
-        filePath,
-      });
-    }
-  };
+  // Commented out - file selection feature disabled for now
+  // const handleSelectFile = (
+  //   fileId: number | undefined,
+  //   fileName: string,
+  //   filePath: string,
+  // ) => {
+  //   if (fileId && fileName && filePath) {
+  //     setSelectedFile({ fileId, fileName, filePath });
+  //     setSelectedFileId(fileId);
+  //   } else {
+  //     console.error('Failed to set selected file due to missing data:', {
+  //       fileId,
+  //       fileName,
+  //       filePath,
+  //     });
+  //   }
+  // };
 
   const handleClearSelectedFile = () => {
     setSelectedFile(null);
@@ -1059,23 +998,6 @@ export default function ChatWindow({
                       <div className='text-xs font-semibold tracking-[0.025em] break-all dark:text-white whitespace-pre-wrap'>
                         {message.selectedFileName}
                       </div>
-                      {message.sender !== 'User' &&
-                        message.selectedFilePath && (
-                          <div className='flex items-center dark:text-white'>
-                            <Button
-                              variant='ghost'
-                              size='sm'
-                              onClick={() =>
-                                window.open(
-                                  `https://expocitydubai.sharepoint.com/sites/AssetInformationLibrary/Docs${message.selectedFilePath}`,
-                                  '_blank',
-                                )
-                              }
-                            >
-                              <OpenInNewRoundedIcon fontSize='small' />
-                            </Button>
-                          </div>
-                        )}
                     </div>
                     <div className='break-words text-left max-w-full dark:text-white whitespace-pre-wrap text-xs font-normal tracking-[0.025em]'>
                       {message.content}
