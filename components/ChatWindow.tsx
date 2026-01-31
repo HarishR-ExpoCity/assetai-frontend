@@ -71,7 +71,7 @@ interface ChatDetail {
 }
 
 interface RelatedFile {
-  file_id: number;
+  file_id: string | number;
   file_type: string;
   file_name: string;
   file_pathid: string;
@@ -82,7 +82,7 @@ interface RelatedFile {
 interface SearchResult {
   file_name: string;
   file_path: string;
-  file_id: number;
+  file_id: string | number;
   file_type: string;
   file_url: string;
   project_name: string;
@@ -378,14 +378,8 @@ export default function ChatWindow({
             case 'sql': {
               const sqlEvent = event as StreamSqlEvent;
               if (sqlEvent.data.file_name) {
-                const fileId = sqlEvent.data.file_id;
-                const numericFileId =
-                  typeof fileId === 'string'
-                    ? parseInt(fileId, 10) || searchResults.length + 1
-                    : fileId || searchResults.length + 1;
-
                 const result: SearchResult = {
-                  file_id: numericFileId,
+                  file_id: sqlEvent.data.file_id || searchResults.length + 1,
                   file_name: sqlEvent.data.file_name,
                   file_path: sqlEvent.data.file_path || '',
                   file_type: sqlEvent.data.file_type || '',
@@ -414,27 +408,28 @@ export default function ChatWindow({
 
             case 'vector': {
               const vectorEvent = event as StreamVectorEvent;
-              if (Array.isArray(vectorEvent.data) && vectorEvent.data.length > 0) {
-                // Vector events contain accumulated results, replace searchResults
-                searchResults.length = 0;
-                for (const fileData of vectorEvent.data) {
-                  if (fileData.file_name) {
-                    const result: SearchResult = {
-                      file_id: parseInt(fileData.file_id, 10) || searchResults.length + 1,
-                      file_name: fileData.file_name,
-                      file_path: fileData.file_path || '',
-                      file_type: fileData.file_type || '',
-                      file_url: fileData.file_url || '',
-                      project_name: '',
-                      relevance_score: fileData.relevance_score || 0,
-                      comments: fileData.comments || '',
-                      tags: fileData.tags || [],
-                      related_files: [],
-                    };
-                    searchResults.push(result);
-                  }
-                }
-                if (searchResults.length > 0) {
+              // Handle both array and single object formats
+              const vectorData = Array.isArray(vectorEvent.data)
+                ? vectorEvent.data
+                : vectorEvent.data && typeof vectorEvent.data === 'object'
+                  ? [vectorEvent.data]
+                  : [];
+
+              for (const fileData of vectorData) {
+                if (fileData.file_name) {
+                  const result: SearchResult = {
+                    file_id: fileData.file_id || searchResults.length + 1,
+                    file_name: fileData.file_name,
+                    file_path: fileData.file_path || '',
+                    file_type: fileData.file_type || '',
+                    file_url: fileData.file_url || '',
+                    project_name: '',
+                    relevance_score: fileData.relevance_score || 0,
+                    comments: fileData.comments || '',
+                    tags: fileData.tags || [],
+                    related_files: [],
+                  };
+                  searchResults.push(result);
                   updateBotMessage(renderSearchResults(searchResults), 'file');
                   // Hide loader once content starts arriving
                   if (!contentStarted) {
@@ -612,9 +607,9 @@ export default function ChatWindow({
                                       {result.file_name}
                                     </div>
                                     <div className='flex items-center gap-2'>
-                                      {result?.tags?.map((tag) => (
+                                      {result?.tags?.map((tag, tagIndex) => (
                                         <div
-                                          key={result.file_id}
+                                          key={`${result.file_id}-tag-${tagIndex}`}
                                           className='flex gap-2'
                                         >
                                           <span className='px-2 py-1 dark:bg-[#FFFFFF40] bg-[#0000000d] text-[8px] font-semibold leading-[12px] rounded flex items-center justify-center'>

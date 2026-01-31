@@ -100,6 +100,32 @@ lib/
 - Handle specific HTTP status codes
 - Ignore `AbortError` in catch blocks
 
+### Runtime Environment Variables (Docker)
+
+This app uses `next-runtime-env` for runtime environment variable support in Docker deployments.
+
+**CRITICAL**: Always use `env()` from `next-runtime-env` for API base URLs in client code:
+
+```typescript
+// In service files or components
+import { env } from 'next-runtime-env';
+
+const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
+
+// Use getBaseUrl() at CALL TIME, not at initialization
+fetch(`${getBaseUrl()}/api/endpoint`);
+```
+
+**Why this matters**:
+
+- `process.env.NEXT_PUBLIC_*` is inlined at **build time** - won't work in Docker
+- `env()` reads from `window.__ENV` injected by `<PublicEnvScript />` at **runtime**
+- URL must be resolved when the API call happens, not when component/hook initializes
+
+**DON'T** use `process.env.NEXT_PUBLIC_*` directly in client components.
+
+**DO** use `env()` directly in services and components for runtime URL resolution.
+
 ---
 
 ## Performance

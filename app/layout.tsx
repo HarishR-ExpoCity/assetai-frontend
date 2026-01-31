@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Poppins } from 'next/font/google';
-import { unstable_noStore as noStore } from 'next/cache';
 import { PublicEnvScript } from 'next-runtime-env';
 import { ThemeProvider } from '@/components/theme-provider';
 import { cn } from '@/lib/utils';
@@ -8,7 +7,6 @@ import './globals.css';
 import AuthProvider from '@/components/auth/auth-provider';
 import { AuthenticationWrapper } from '@/components/auth/AuthenticationWrapper';
 import { MaterialSymbolsFont } from '@/components/MaterialSymbolsFont';
-import { EnvProvider } from '@/context/EnvContext';
 import { Toaster } from 'sonner';
 
 const poppins = Poppins({
@@ -22,18 +20,11 @@ export const metadata: Metadata = {
   description: 'Dome file manager',
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Opt out of static rendering to read env vars at runtime
-  noStore();
-
-  const envConfig = {
-    assetaiApiBaseUrl: process.env.NEXT_PUBLIC_ASSETAI_API_BASE_URL || '',
-  };
-
   return (
     <html lang='en' suppressHydrationWarning className={cn('no-scrollbar')}>
       <head>
@@ -50,13 +41,11 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <EnvProvider config={envConfig}>
-            <AuthProvider>
-              <AuthenticationWrapper>
-                {children}
-              </AuthenticationWrapper>
-            </AuthProvider>
-          </EnvProvider>
+          <AuthProvider>
+            <AuthenticationWrapper>
+              {children}
+            </AuthenticationWrapper>
+          </AuthProvider>
           <Toaster position='bottom-right' richColors closeButton />
         </ThemeProvider>
       </body>

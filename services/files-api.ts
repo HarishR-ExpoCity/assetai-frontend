@@ -42,13 +42,13 @@ type FilesApiResult<T> = {
  * Map backend vector_status to UI status
  *
  * Backend values: in_extraction, in_process, in_embedding, chunked,
- * partially_processed, fully_embedded, failed, archived
+ * partially_processed, fully_processed, fully_embedded, failed, archived
  */
 export function mapFileStatus(file: FileItem): FileStatus {
   const { vector_status } = file;
 
   // Success - fully processed and ready
-  if (vector_status === 'fully_embedded') return 'success';
+  if (vector_status === 'fully_embedded' || vector_status === 'fully_processed') return 'success';
 
   // Failed
   if (vector_status === 'failed') return 'failed';

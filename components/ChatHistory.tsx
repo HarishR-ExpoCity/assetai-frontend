@@ -50,7 +50,7 @@ export default function ChatHistory({
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   // Delete confirmation dialog state
-  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [chatToDelete, setChatToDelete] = useState<ChatHistoryItem | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const { isAuthenticated } = useAccessToken();
@@ -96,15 +96,18 @@ export default function ChatHistory({
   };
 
   const handleDeleteClick = useCallback((sessionId: string) => {
-    setChatToDelete(sessionId);
-    setIsDeleteDialogOpen(true);
-  }, []);
+    const chat = chatHistory.find((c) => c.session_id === sessionId);
+    if (chat) {
+      setChatToDelete(chat);
+      setIsDeleteDialogOpen(true);
+    }
+  }, [chatHistory]);
 
   const confirmDelete = useCallback(async () => {
     if (!chatToDelete || !isAuthenticated) return;
 
     try {
-      const result = await deleteChat(chatToDelete);
+      const result = await deleteChat(chatToDelete.session_id);
 
       if (result.success) {
         fetchChatHistory();
@@ -286,10 +289,7 @@ export default function ChatHistory({
             </DialogTitle>
             <DialogDescription className='text-[#000000D9] dark:text-[#FFFFFFD9] text-base font-light'>
               This will delete{' '}
-              <span className='font-semibold'>
-                {chatHistory.find((c) => c.session_id === chatToDelete)
-                  ?.search_query || 'this chat'}
-              </span>
+              <span className='font-semibold'>{chatToDelete?.search_query}</span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className='sm:justify-end'>

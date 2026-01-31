@@ -72,7 +72,7 @@ export interface StreamVectorFileResult {
 
 export interface StreamVectorEvent {
   type: 'vector';
-  data: StreamVectorFileResult[];
+  data: StreamVectorFileResult[] | StreamVectorFileResult;
 }
 
 export interface StreamEndEvent {
