@@ -22,10 +22,14 @@ import {
   parseStreamEvent,
   type StreamChatEvent,
   type StreamSqlEvent,
+  type StreamVectorEvent,
 } from '@/services/chat-api';
 import { getValidAccessToken } from '@/services/auth-api';
-import { useEnvConfig } from '@/context/EnvContext';
+import { env } from 'next-runtime-env';
 import { toast } from 'sonner';
+
+// Runtime URL resolution - reads from window.__ENV injected by PublicEnvScript
+const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
 interface FileMessageContent {
   fileName: string;
@@ -115,7 +119,6 @@ export default function ChatWindow({
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const { isAuthenticated } = useAccessToken();
-  const { assetaiApiBaseUrl } = useEnvConfig();
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -409,6 +412,40 @@ export default function ChatWindow({
               break;
             }
 
+            case 'vector': {
+              const vectorEvent = event as StreamVectorEvent;
+              if (Array.isArray(vectorEvent.data) && vectorEvent.data.length > 0) {
+                // Vector events contain accumulated results, replace searchResults
+                searchResults.length = 0;
+                for (const fileData of vectorEvent.data) {
+                  if (fileData.file_name) {
+                    const result: SearchResult = {
+                      file_id: parseInt(fileData.file_id, 10) || searchResults.length + 1,
+                      file_name: fileData.file_name,
+                      file_path: fileData.file_path || '',
+                      file_type: fileData.file_type || '',
+                      file_url: fileData.file_url || '',
+                      project_name: '',
+                      relevance_score: fileData.relevance_score || 0,
+                      comments: fileData.comments || '',
+                      tags: fileData.tags || [],
+                      related_files: [],
+                    };
+                    searchResults.push(result);
+                  }
+                }
+                if (searchResults.length > 0) {
+                  updateBotMessage(renderSearchResults(searchResults), 'file');
+                  // Hide loader once content starts arriving
+                  if (!contentStarted) {
+                    contentStarted = true;
+                    setLoading(false);
+                  }
+                }
+              }
+              break;
+            }
+
             case 'end':
               setLoading(false);
               break;
@@ -522,7 +559,7 @@ export default function ChatWindow({
           }
 
           const response = await fetch(
-            `${assetaiApiBaseUrl}/chat/history/${selectedSessionId}`,
+            `${getBaseUrl()}/chat/history/${selectedSessionId}`,
             {
               headers: {
                 Accept: 'application/json',
@@ -808,7 +845,7 @@ export default function ChatWindow({
           return;
         }
 
-        const response = await fetch(`${assetaiApiBaseUrl}/search/sources`, {
+        const response = await fetch(`${getBaseUrl()}/search/sources`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

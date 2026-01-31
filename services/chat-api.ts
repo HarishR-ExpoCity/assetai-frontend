@@ -19,7 +19,7 @@ export interface ChatRequest {
 
 // ============ Streaming Interfaces ============
 
-export type StreamEventType = 'start' | 'chat' | 'sql' | 'end' | 'error';
+export type StreamEventType = 'start' | 'chat' | 'sql' | 'vector' | 'end' | 'error';
 
 export interface StreamStartEvent {
   type: 'start';
@@ -59,6 +59,22 @@ export interface StreamSqlEvent {
   };
 }
 
+export interface StreamVectorFileResult {
+  file_id: string;
+  file_type: string | null;
+  file_name: string | null;
+  file_path: string | null;
+  file_url: string;
+  relevance_score: number;
+  comments: string;
+  tags: string[];
+}
+
+export interface StreamVectorEvent {
+  type: 'vector';
+  data: StreamVectorFileResult[];
+}
+
 export interface StreamEndEvent {
   type: 'end';
   data?: unknown;
@@ -76,6 +92,7 @@ export type StreamEvent =
   | StreamStartEvent
   | StreamChatEvent
   | StreamSqlEvent
+  | StreamVectorEvent
   | StreamEndEvent
   | StreamErrorEvent;
 
