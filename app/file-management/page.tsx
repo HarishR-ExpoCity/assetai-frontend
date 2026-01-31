@@ -49,6 +49,17 @@ import { toast } from 'sonner';
 
 const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
 
+const PREVIEWABLE_EXTENSIONS = new Set([
+  'pdf',
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp',
+  'txt', 'md', 'json', 'xml', 'csv', 'log', 'html', 'css', 'js', 'ts',
+]);
+
+const isFilePreviewable = (filename: string): boolean => {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  return PREVIEWABLE_EXTENSIONS.has(ext);
+};
+
 export default function FileManagementPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -289,6 +300,7 @@ export default function FileManagementPage() {
                     <TableBody>
                       {filesList.map((file, index) => {
                         const status = mapFileStatus(file);
+                        const canPreview = isFilePreviewable(file.filename);
                         return (
                           <TableRow
                             key={file.id}
@@ -299,8 +311,8 @@ export default function FileManagementPage() {
                             }`}
                           >
                             <TableCell
-                              onClick={() => handlePreview(file)}
-                              className='font-medium truncate max-w-[300px] cursor-pointer hover:text-[#5836F5]'
+                              onClick={canPreview ? () => handlePreview(file) : undefined}
+                              className={`font-medium truncate max-w-[300px] ${canPreview ? 'cursor-pointer hover:text-[#5836F5]' : ''}`}
                             >
                               {file.filename}
                             </TableCell>

@@ -106,6 +106,38 @@ export async function getFilesList(): Promise<FilesApiResult<FileItem[]>> {
 }
 
 /**
+ * Get file preview blob by file_id (UUID)
+ * Fetches the file content for preview display
+ */
+export async function getFilePreview(fileId: string): Promise<FilesApiResult<Blob>> {
+  try {
+    const response = await authFetch(`${getBaseUrl()}/files/file/${fileId}?preview=True`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      const responseData = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        error: responseData.detail || 'Failed to load file preview',
+      };
+    }
+
+    const blob = await response.blob();
+    return {
+      success: true,
+      data: blob,
+    };
+  } catch (error) {
+    console.error('File preview API error:', error);
+    return {
+      success: false,
+      error: 'Network error. Please check your connection and try again.',
+    };
+  }
+}
+
+/**
  * Delete a file by file_id (UUID)
  * Uses authFetch for automatic 401 retry with token refresh
  */

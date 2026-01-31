@@ -213,19 +213,11 @@ export default function ChatWindow({
                               width={20}
                               height={20}
                             />
-                          ) : result.file_type === 'dwg' ||
-                            result.file_type === '.dwg' ? (
+                          ) : result.file_type === 'docx' ||
+                            result.file_type === '.docx' ? (
                             <Image
-                              src={addBasePath('/icons/dwg.svg')}
-                              alt='DWG'
-                              width={20}
-                              height={20}
-                            />
-                          ) : result.file_type === 'mht' ||
-                            result.file_type === '.mht' ? (
-                            <Image
-                              src={addBasePath('/icons/mht.svg')}
-                              alt='MHT'
+                              src={addBasePath('/icons/docx.svg')}
+                              alt='DOCX'
                               width={20}
                               height={20}
                             />
@@ -655,26 +647,14 @@ export default function ChatWindow({
                                                           height={20}
                                                         />
                                                       ) : relatedFile.file_type ===
-                                                          'dwg' ||
+                                                          'docx' ||
                                                         relatedFile.file_type ===
-                                                          '.dwg' ? (
+                                                          '.docx' ? (
                                                         <Image
                                                           src={addBasePath(
-                                                            '/icons/dwg.svg',
+                                                            '/icons/docx.svg',
                                                           )}
-                                                          alt='DWG'
-                                                          width={20}
-                                                          height={20}
-                                                        />
-                                                      ) : relatedFile.file_type ===
-                                                          'mht' ||
-                                                        relatedFile.file_type ===
-                                                          '.mht' ? (
-                                                        <Image
-                                                          src={addBasePath(
-                                                            '/icons/mht.svg',
-                                                          )}
-                                                          alt='MHT'
+                                                          alt='DOCX'
                                                           width={20}
                                                           height={20}
                                                         />
@@ -717,26 +697,14 @@ export default function ChatWindow({
                                                     height={20}
                                                   />
                                                 ) : result.file_type ===
-                                                    'dwg' ||
+                                                    'docx' ||
                                                   result.file_type ===
-                                                    '.dwg' ? (
+                                                    '.docx' ? (
                                                   <Image
                                                     src={addBasePath(
-                                                      '/icons/dwg.svg',
+                                                      '/icons/docx.svg',
                                                     )}
-                                                    alt='DWG'
-                                                    width={20}
-                                                    height={20}
-                                                  />
-                                                ) : result.file_type ===
-                                                    'mht' ||
-                                                  result.file_type ===
-                                                    '.mht' ? (
-                                                  <Image
-                                                    src={addBasePath(
-                                                      '/icons/mht.svg',
-                                                    )}
-                                                    alt='MHT'
+                                                    alt='DOCX'
                                                     width={20}
                                                     height={20}
                                                   />

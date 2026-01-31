@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
-import type { FileItem } from '@/services/files-api';
+import { getFilePreview, type FileItem } from '@/services/files-api';
 
 const LOADING_TIMEOUT_MS = 30000; // 30 seconds timeout
 
@@ -52,58 +52,86 @@ const isPreviewableText = (ext: string): boolean => {
 export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [textContent, setTextContent] = useState<string | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Reset state when opening with a new file
+  // Fetch file preview when opening
   useEffect(() => {
     if (isOpen && file) {
       setIsLoading(true);
       setError(null);
+      setBlobUrl(null);
+      setTextContent(null);
 
-      // Set loading timeout to prevent infinite loading state
+      const ext = getFileExtension(file.filename);
+
+      // Skip fetching for non-previewable files
+      if (!isPreviewablePdf(ext) && !isPreviewableImage(ext) && !isPreviewableText(ext)) {
+        setIsLoading(false);
+        return;
+      }
+
+      abortControllerRef.current = new AbortController();
+
+      // Set loading timeout
       timeoutRef.current = setTimeout(() => {
         setIsLoading((current) => {
           if (current) {
             setError('Preview took too long to load');
+            abortControllerRef.current?.abort();
             return false;
           }
           return current;
         });
       }, LOADING_TIMEOUT_MS);
+
+      // Fetch file preview
+      getFilePreview(file.file_id).then(async (result) => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+
+        if (result.success && result.data) {
+          if (isPreviewableText(ext)) {
+            const text = await result.data.text();
+            setTextContent(text);
+          } else {
+            const url = URL.createObjectURL(result.data);
+            setBlobUrl(url);
+          }
+          setIsLoading(false);
+        } else {
+          setError(result.error || 'Failed to load file preview');
+          setIsLoading(false);
+        }
+      });
     }
 
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      abortControllerRef.current?.abort();
     };
   }, [isOpen, file]);
 
-  // Reset state when closing
+  // Cleanup blob URL and reset state when closing
   useEffect(() => {
     if (!isOpen) {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
       setIsLoading(true);
       setError(null);
+      setBlobUrl(null);
+      setTextContent(null);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     }
-  }, [isOpen]);
-
-  const handleLoad = () => {
-    setIsLoading(false);
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-  };
-
-  const handleError = () => {
-    setIsLoading(false);
-    setError('Failed to load file preview');
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-  };
+  }, [isOpen, blobUrl]);
 
   const handleDownload = () => {
     if (file?.url) {
@@ -133,45 +161,40 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
       );
     }
 
-    // PDF preview
-    if (isPreviewablePdf(ext)) {
+    // Loading state for previewable files
+    if (isLoading && (isPreviewablePdf(ext) || isPreviewableImage(ext) || isPreviewableText(ext))) {
       return (
         <div className='relative h-full w-full'>
-          {isLoading && (
-            <div className='absolute inset-0 flex items-center justify-center'>
-              <Skeleton className='h-full w-full rounded-lg' />
-            </div>
-          )}
+          <div className='absolute inset-0 flex items-center justify-center'>
+            <Skeleton className='h-full w-full rounded-lg' />
+          </div>
+        </div>
+      );
+    }
+
+    // PDF preview
+    if (isPreviewablePdf(ext) && blobUrl) {
+      return (
+        <div className='relative h-full w-full'>
           <iframe
-            src={file.url}
-            className={`w-full h-full border-0 rounded-lg ${isLoading ? 'invisible' : 'visible'}`}
+            src={blobUrl}
+            className='w-full h-full border-0 rounded-lg'
             title={`Preview of ${file.filename}`}
-            onLoad={handleLoad}
-            onError={handleError}
           />
         </div>
       );
     }
 
     // Image preview
-    if (isPreviewableImage(ext)) {
+    if (isPreviewableImage(ext) && blobUrl) {
       return (
         <div className='relative h-full w-full'>
-          {isLoading && (
-            <div className='absolute inset-0 flex items-center justify-center'>
-              <Skeleton className='h-full w-full rounded-lg' />
-            </div>
-          )}
-          <div
-            className={`flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900 rounded-lg overflow-auto ${isLoading ? 'invisible' : 'visible'}`}
-          >
+          <div className='flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900 rounded-lg overflow-auto'>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={file.url}
+              src={blobUrl}
               alt={file.filename}
               className='max-w-full max-h-full object-contain'
-              onLoad={handleLoad}
-              onError={handleError}
             />
           </div>
         </div>
@@ -179,22 +202,12 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
     }
 
     // Text file preview
-    if (isPreviewableText(ext)) {
+    if (isPreviewableText(ext) && textContent !== null) {
       return (
-        <div className='relative h-full w-full'>
-          {isLoading && (
-            <div className='absolute inset-0 flex items-center justify-center'>
-              <Skeleton className='h-full w-full rounded-lg' />
-            </div>
-          )}
-          <iframe
-            src={file.url}
-            className={`w-full h-full border-0 rounded-lg bg-white dark:bg-gray-900 ${isLoading ? 'invisible' : 'visible'}`}
-            title={`Preview of ${file.filename}`}
-            sandbox='allow-same-origin'
-            onLoad={handleLoad}
-            onError={handleError}
-          />
+        <div className='h-full w-full overflow-auto bg-gray-50 dark:bg-gray-900 rounded-lg p-4'>
+          <pre className='text-sm whitespace-pre-wrap break-words font-mono'>
+            {textContent}
+          </pre>
         </div>
       );
     }
@@ -216,20 +229,6 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
       </div>
     );
   };
-
-  // Trigger load check for non-previewable files
-  useEffect(() => {
-    if (file && isOpen) {
-      const ext = getFileExtension(file.filename);
-      if (
-        !isPreviewablePdf(ext) &&
-        !isPreviewableImage(ext) &&
-        !isPreviewableText(ext)
-      ) {
-        setIsLoading(false);
-      }
-    }
-  }, [file, isOpen]);
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
