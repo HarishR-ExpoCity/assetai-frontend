@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { env } from 'next-runtime-env';
 import { useAuth } from '@/components/auth/auth-provider';
-import { useEnvConfig } from '@/context/EnvContext';
 import Layout from '@/components/Layout';
 import { FileUploader } from '@/components/FileUploader';
 import { FilePreview } from '@/components/FilePreview';
@@ -47,9 +47,10 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
+const getBaseUrl = () => env('NEXT_PUBLIC_ASSETAI_API_BASE_URL') || '';
+
 export default function FileManagementPage() {
   const { isAuthenticated, isLoading } = useAuth();
-  const { assetaiApiBaseUrl } = useEnvConfig();
   const router = useRouter();
 
   const [filesList, setFilesList] = useState<FileItem[]>([]);
@@ -79,7 +80,7 @@ export default function FileManagementPage() {
     cancelAll,
     clearCompleted,
   } = useFileUpload({
-    url: `${assetaiApiBaseUrl}/files/upload/`,
+    url: () => `${getBaseUrl()}/files/upload/`,
     maxConcurrent: 3,
     onFileComplete: (file) => {
       if (file.status === 'success') {

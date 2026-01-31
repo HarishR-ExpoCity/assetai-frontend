@@ -17,7 +17,7 @@ export type FileUploadItem = {
 };
 
 type UploadOptions = {
-  url: string;
+  url: string | (() => string);
   maxConcurrent?: number;
   onFileComplete?: (item: FileUploadItem) => void;
   onAllComplete?: (items: FileUploadItem[]) => void;
@@ -26,7 +26,10 @@ type UploadOptions = {
 // ============ Hook ============
 
 export function useFileUpload(options: UploadOptions) {
-  const { url, maxConcurrent = 3, onFileComplete, onAllComplete } = options;
+  const { url: urlOption, maxConcurrent = 3, onFileComplete, onAllComplete } = options;
+
+  // Resolve URL at call time to support runtime environment variables
+  const getUrl = () => (typeof urlOption === 'function' ? urlOption() : urlOption);
 
   const [files, setFiles] = useState<FileUploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -167,7 +170,7 @@ export function useFileUpload(options: UploadOptions) {
           const formData = new FormData();
           formData.append('file', item.file);
 
-          xhr.open('POST', url);
+          xhr.open('POST', getUrl());
 
           // Set authorization header if we have a token
           if (token) {
@@ -194,7 +197,7 @@ export function useFileUpload(options: UploadOptions) {
 
       return performUpload(token, false);
     },
-    [url, updateFile]
+    [getUrl, updateFile]
   );
 
   // Process upload queue with concurrency control
