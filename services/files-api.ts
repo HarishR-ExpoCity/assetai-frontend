@@ -42,13 +42,13 @@ type FilesApiResult<T> = {
  * Map backend vector_status to UI status
  *
  * Backend values: in_extraction, in_process, in_embedding, chunked,
- * partially_processed, fully_processed, fully_embedded, failed, archived
+ * partially_processed, fully_processed, partially_embedded, fully_embedded, failed, archived
  */
 export function mapFileStatus(file: FileItem): FileStatus {
   const { vector_status } = file;
 
   // Success - fully processed and ready
-  if (vector_status === 'fully_embedded' || vector_status === 'fully_processed') return 'success';
+  if (vector_status === 'fully_embedded' || vector_status === 'partially_embedded') return 'success';
 
   // Failed
   if (vector_status === 'failed') return 'failed';
@@ -62,7 +62,8 @@ export function mapFileStatus(file: FileItem): FileStatus {
     vector_status === 'in_process' ||
     vector_status === 'in_embedding' ||
     vector_status === 'chunked' ||
-    vector_status === 'partially_processed'
+    vector_status === 'partially_processed' ||
+    vector_status === 'fully_processed'
   ) {
     return 'in_progress';
   }
@@ -98,6 +99,38 @@ export async function getFilesList(): Promise<FilesApiResult<FileItem[]>> {
     };
   } catch (error) {
     console.error('Files list API error:', error);
+    return {
+      success: false,
+      error: 'Network error. Please check your connection and try again.',
+    };
+  }
+}
+
+/**
+ * Get file download blob by file_id (UUID)
+ * Fetches the file content for download
+ */
+export async function getFileDownload(fileId: string): Promise<FilesApiResult<Blob>> {
+  try {
+    const response = await authFetch(`${getBaseUrl()}/files/file/${fileId}?download=True`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      const responseData = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        error: responseData.detail || 'Failed to download file',
+      };
+    }
+
+    const blob = await response.blob();
+    return {
+      success: true,
+      data: blob,
+    };
+  } catch (error) {
+    console.error('File download API error:', error);
     return {
       success: false,
       error: 'Network error. Please check your connection and try again.',

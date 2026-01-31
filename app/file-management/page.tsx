@@ -8,6 +8,7 @@ import Layout from '@/components/Layout';
 import { FileUploader } from '@/components/FileUploader';
 import { FilePreview } from '@/components/FilePreview';
 import { useFileUpload } from '@/hooks/useFileUpload';
+import { useFilePolling } from '@/hooks/useFilePolling';
 import {
   Table,
   TableBody,
@@ -34,6 +35,7 @@ import {
   getFilesList,
   mapFileStatus,
   deleteFile,
+  getFileDownload,
   FileItem,
   FileStatus,
 } from '@/services/files-api';
@@ -119,6 +121,13 @@ export default function FileManagementPage() {
     }
   }, [isAuthenticated, fetchFiles]);
 
+  // Poll for file status updates every 30 seconds
+  useFilePolling(filesList, {
+    interval: 30000,
+    enabled: isAuthenticated,
+    onSuccess: (files) => setFilesList(files),
+  });
+
   const getStatusIcon = (status: FileStatus) => {
     switch (status) {
       case 'success':
@@ -173,8 +182,20 @@ export default function FileManagementPage() {
     }
   };
 
-  const handleDownload = (file: FileItem) => {
-    window.open(file.url, '_blank');
+  const handleDownload = async (file: FileItem) => {
+    const result = await getFileDownload(file.file_id);
+    if (result.success && result.data) {
+      const url = URL.createObjectURL(result.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else {
+      toast.error(result.error || 'Failed to download file');
+    }
   };
 
   const handlePreview = (file: FileItem) => {

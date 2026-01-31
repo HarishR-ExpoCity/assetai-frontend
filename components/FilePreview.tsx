@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
-import { getFilePreview, type FileItem } from '@/services/files-api';
+import { getFilePreview, getFileDownload, type FileItem } from '@/services/files-api';
 
 const LOADING_TIMEOUT_MS = 30000; // 30 seconds timeout
 
@@ -133,9 +133,18 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
     }
   }, [isOpen, blobUrl]);
 
-  const handleDownload = () => {
-    if (file?.url) {
-      window.open(file.url, '_blank');
+  const handleDownload = async () => {
+    if (!file) return;
+    const result = await getFileDownload(file.file_id);
+    if (result.success && result.data) {
+      const url = URL.createObjectURL(result.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
   };
 
