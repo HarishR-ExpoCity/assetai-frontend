@@ -78,6 +78,20 @@ lib/
 2. **Context**: Auth state (`useAuth`)
 3. **Local UI state**: `useState` (modals, form inputs)
 
+### Dialog/Modal State Pattern
+
+For delete confirmations and similar dialogs, store the full object (not just ID):
+
+```typescript
+// BAD - data can become stale during async operation
+const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+const item = items.find(i => i.id === itemToDelete); // May be undefined after delete
+
+// GOOD - store full object when dialog opens
+const [itemToDelete, setItemToDelete] = useState<Item | null>(null);
+// itemToDelete persists through the delete operation
+```
+
 ---
 
 ## Styling
@@ -146,6 +160,78 @@ fetch(`${getBaseUrl()}/api/endpoint`);
 - **Event listeners** - Store handler in ref, remove in cleanup
 - **Timeouts/Intervals** - Track in ref, clear in cleanup
 - **AbortController** - Cancel in-flight requests
+- **Blob URLs** - Call `URL.revokeObjectURL()` in cleanup
+
+### Preventing stale closures in hooks
+
+- Use `useRef` for callbacks passed as options to avoid effect re-runs
+- Use `isMountedRef` pattern for async operations to prevent state updates after unmount
+
+```typescript
+// BAD - inline callback causes effect to re-run on every render
+useCustomHook({ onSuccess: (data) => setState(data) });
+
+// GOOD - hook uses ref internally, no effect re-runs
+const onSuccessRef = useRef(onSuccess);
+onSuccessRef.current = onSuccess; // Update ref, not dependency
+```
+
+### Async operations safety
+
+```typescript
+const isMountedRef = useRef(true);
+
+useEffect(() => {
+  isMountedRef.current = true;
+  return () => { isMountedRef.current = false; };
+}, []);
+
+const fetchData = async () => {
+  const result = await api.getData();
+  if (!isMountedRef.current) return; // Don't update state if unmounted
+  setState(result);
+};
+```
+
+---
+
+## Custom Hooks Standards
+
+- **Return type** - Always define explicit return type
+- **Stable references** - Use refs for callbacks to prevent unnecessary re-renders
+- **Cleanup** - Always clean up side effects in useEffect return
+- **SSR safety** - Never access `document` or `window` during render (only in effects)
+
+```typescript
+// BAD - causes hydration mismatch
+return { isVisible: !document.hidden };
+
+// GOOD - only access in effects
+useEffect(() => {
+  const handleChange = () => setIsVisible(!document.hidden);
+  document.addEventListener('visibilitychange', handleChange);
+  return () => document.removeEventListener('visibilitychange', handleChange);
+}, []);
+```
+
+---
+
+## Polling & Real-time Data
+
+When implementing polling:
+
+- **Page Visibility API** - Pause polling when tab is hidden
+- **Smart polling** - Only poll when data needs updates (check status)
+- **Prevent concurrent requests** - Use ref flag to block overlapping fetches
+- **Configurable interval** - Allow interval to be passed as option
+
+```typescript
+// Pause when tab hidden
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopPolling();
+  else startPolling();
+});
+```
 
 ---
 
@@ -179,6 +265,54 @@ fetch(`${getBaseUrl()}/api/endpoint`);
 - User-friendly error messages
 - Toast notifications for transient errors
 - Implement retry with exponential backoff for flaky APIs
+- Handle network errors gracefully with offline detection
+
+---
+
+## Loading & Empty States
+
+Every data-fetching component must handle:
+
+- **Loading state** - Show spinner or skeleton
+- **Empty state** - Friendly message when no data exists
+- **Error state** - Display error with retry option
+
+```typescript
+if (isLoading) return <Spinner />;
+if (error) return <ErrorMessage onRetry={refetch} />;
+if (data.length === 0) return <EmptyState />;
+return <DataList data={data} />;
+```
+
+---
+
+## Race Conditions
+
+Prevent race conditions in async operations:
+
+```typescript
+// BAD - race condition if user types fast
+const handleSearch = async (query: string) => {
+  const results = await search(query);
+  setResults(results); // Older request might resolve after newer one
+};
+
+// GOOD - abort previous request
+const abortControllerRef = useRef<AbortController | null>(null);
+
+const handleSearch = async (query: string) => {
+  abortControllerRef.current?.abort();
+  abortControllerRef.current = new AbortController();
+
+  try {
+    const results = await search(query, { signal: abortControllerRef.current.signal });
+    setResults(results);
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') return; // Ignore aborted
+    throw e;
+  }
+};
+```
 
 ---
 
@@ -201,6 +335,11 @@ fetch(`${getBaseUrl()}/api/endpoint`);
 - **DON'T** skip accessibility attributes on interactive elements
 - **DON'T** store derived state - compute it instead
 - **DON'T** use `key={index}` for dynamic lists
+- **DON'T** access `document` or `window` during render (SSR unsafe)
+- **DON'T** pass inline callbacks to custom hooks (causes effect re-runs)
+- **DON'T** forget cleanup in useEffect (intervals, listeners, subscriptions)
+- **DON'T** update state after component unmounts (memory leak)
+- **DON'T** create multiple intervals/listeners without cleanup
 
 ---
 

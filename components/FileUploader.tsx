@@ -141,7 +141,7 @@ export function FileUploader({
               Max {maxFiles} files, up to {formatFileSize(maxSize)} each
             </p>
             <p className='text-xs text-gray-400 dark:text-gray-500'>
-              Supported: PDF, DOC, DOCX, TXT, CSV, PNG, JPG, GIF
+              Supported: PDF, DOCX, TXT, CSV
             </p>
           </div>
         </div>

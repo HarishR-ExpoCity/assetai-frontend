@@ -62,6 +62,17 @@ const isFilePreviewable = (filename: string): boolean => {
   return PREVIEWABLE_EXTENSIONS.has(ext);
 };
 
+const formatUploadDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
 export default function FileManagementPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -266,12 +277,10 @@ export default function FileManagementPage() {
                 onClearCompleted={clearCompleted}
                 accept={{
                   'application/pdf': ['.pdf'],
-                  'application/msword': ['.doc'],
                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
                     ['.docx'],
                   'text/plain': ['.txt'],
                   'text/csv': ['.csv'],
-                  'image/*': ['.png', '.jpg', '.jpeg', '.gif'],
                 }}
                 maxSize={50 * 1024 * 1024}
                 maxFiles={10}
@@ -313,6 +322,9 @@ export default function FileManagementPage() {
                         <TableHead className='font-semibold w-[150px] text-center'>
                           Status
                         </TableHead>
+                        <TableHead className='font-semibold w-[160px] text-center'>
+                          Uploaded
+                        </TableHead>
                         <TableHead className='font-semibold w-[80px] text-center'>
                           Actions
                         </TableHead>
@@ -344,6 +356,9 @@ export default function FileManagementPage() {
                                   {getStatusText(status)}
                                 </span>
                               </div>
+                            </TableCell>
+                            <TableCell className='text-center text-xs text-gray-500 dark:text-gray-400'>
+                              {formatUploadDate(file.created_at)}
                             </TableCell>
                             <TableCell className='text-center'>
                               <Popover>
