@@ -80,6 +80,20 @@ function AuthPageSkeleton() {
   );
 }
 
+const DEFAULT_REDIRECT = '/chat';
+
+function getSafeRedirectPath(redirect: string | null): string {
+  if (!redirect) return DEFAULT_REDIRECT;
+
+  // Allow safe relative paths (starts with / but not //)
+  if (redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect;
+  }
+
+  // Reject all other values (absolute URLs, protocol-relative, javascript:, etc.)
+  return DEFAULT_REDIRECT;
+}
+
 // Inner component that uses useSearchParams
 function AuthPageContent() {
   const router = useRouter();
@@ -87,8 +101,8 @@ function AuthPageContent() {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const { theme, resolvedTheme } = useTheme();
 
-  // Get redirect path from query params (set by middleware)
-  const redirectPath = searchParams.get('redirect') || '/chat';
+  // Get redirect path from query params (set by middleware) - validated for security
+  const redirectPath = getSafeRedirectPath(searchParams.get('redirect'));
 
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [isLoading, setIsLoading] = useState(false);

@@ -22,7 +22,10 @@ export function AuthenticationWrapper({
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check if current route is public (doesn't require auth)
-  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname?.startsWith(route));
+  // Use exact match or segment boundary to prevent /auth matching /authentication
+  const isPublicRoute = PUBLIC_ROUTES.some(
+    route => pathname === route || pathname?.startsWith(`${route}/`)
+  );
 
   const navigateToAuth = useCallback(() => {
     // Clear any existing timeout
@@ -61,6 +64,11 @@ export function AuthenticationWrapper({
       navigateToAuth();
     }
   }, [isLoading, isAuthenticated, isPublicRoute, navigateToAuth]);
+
+  // Reset redirect flag on route change to allow new redirect attempts
+  useEffect(() => {
+    isRedirecting.current = false;
+  }, [pathname]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

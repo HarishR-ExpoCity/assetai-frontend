@@ -90,6 +90,15 @@ export default function AuthProvider({ children }: AuthProviderProps) {
 
       // Session is valid - get user info from refreshed token
       const stored = getStoredAuth();
+
+      // Validate the stored auth has valid user info (same check as login())
+      if (!stored.user) {
+        clearTokens();
+        setAuthState({ isAuthenticated: false, user: null });
+        setIsLoading(false);
+        return;
+      }
+
       setAuthState(stored);
       setIsLoading(false);
     };
@@ -104,6 +113,14 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     if (result.success) {
       // Get user from the newly stored token
       const user = getUserFromToken();
+
+      if (!user) {
+        // Token was stored but couldn't be decoded - clear and treat as failure
+        clearTokens();
+        setAuthState({ isAuthenticated: false, user: null });
+        return { success: false, error: { detail: 'Failed to decode user information' } };
+      }
+
       setAuthState({ isAuthenticated: true, user });
     }
 

@@ -29,7 +29,10 @@ export function useFileUpload(options: UploadOptions) {
   const { url: urlOption, maxConcurrent = 3, onFileComplete, onAllComplete } = options;
 
   // Resolve URL at call time to support runtime environment variables
-  const getUrl = () => (typeof urlOption === 'function' ? urlOption() : urlOption);
+  const getUrl = useCallback(
+    () => (typeof urlOption === 'function' ? urlOption() : urlOption),
+    [urlOption]
+  );
 
   const [files, setFiles] = useState<FileUploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -37,6 +40,7 @@ export function useFileUpload(options: UploadOptions) {
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeUploadsRef = useRef(0);
   const processingIdsRef = useRef<Set<string>>(new Set());
+  const hasCalledAllCompleteRef = useRef(false);
 
   // Generate unique ID for each file
   const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -186,6 +190,12 @@ export function useFileUpload(options: UploadOptions) {
 
       if (!token) {
         // No valid token available - can't proceed
+        // Clean up the AbortController we stored at the start of uploadFile
+        const controller = abortControllersRef.current.get(item.id);
+        if (controller) {
+          controller.abort();
+        }
+        abortControllersRef.current.delete(item.id);
         const updatedItem: FileUploadItem = {
           ...item,
           status: 'error',
@@ -241,7 +251,8 @@ export function useFileUpload(options: UploadOptions) {
             f => f.status === 'success' || f.status === 'error'
           );
 
-          if (allComplete && latestFiles.length > 0) {
+          if (allComplete && latestFiles.length > 0 && !hasCalledAllCompleteRef.current) {
+            hasCalledAllCompleteRef.current = true;
             setIsUploading(false);
             onAllComplete?.(latestFiles);
           }
@@ -267,6 +278,7 @@ export function useFileUpload(options: UploadOptions) {
         progress: 0,
       }));
 
+      hasCalledAllCompleteRef.current = false;
       setFiles(prev => [...prev, ...fileItems]);
       setIsUploading(true);
 
@@ -306,6 +318,7 @@ export function useFileUpload(options: UploadOptions) {
   // Retry a failed upload
   const retryUpload = useCallback(
     (id: string) => {
+      hasCalledAllCompleteRef.current = false;
       setFiles(prev =>
         prev.map(f =>
           f.id === id ? { ...f, status: 'pending' as FileStatus, progress: 0, error: undefined } : f

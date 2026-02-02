@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 type GlobalErrorProps = {
   error: Error & { digest?: string };
@@ -8,6 +8,8 @@ type GlobalErrorProps = {
 };
 
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
+  const [isHovered, setIsHovered] = useState(false);
+
   useEffect(() => {
     console.error('Global application error:', error);
   }, [error]);
@@ -48,8 +50,10 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
             </p>
             <button
               onClick={reset}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
               style={{
-                backgroundColor: '#5836F5',
+                backgroundColor: isHovered ? '#4628D9' : '#5836F5',
                 color: 'white',
                 padding: '0.75rem 1.5rem',
                 borderRadius: '0.5rem',
@@ -57,6 +61,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                 fontSize: '0.875rem',
                 fontWeight: 500,
                 cursor: 'pointer',
+                transition: 'background-color 0.15s ease',
               }}
             >
               Try Again

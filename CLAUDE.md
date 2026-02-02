@@ -165,7 +165,7 @@ fetch(`${getBaseUrl()}/api/endpoint`);
 ### Preventing stale closures in hooks
 
 - Use `useRef` for callbacks passed as options to avoid effect re-runs
-- Use `isMountedRef` pattern for async operations to prevent state updates after unmount
+- Use `AbortController` for async operations to prevent state updates after unmount
 
 ```typescript
 // BAD - inline callback causes effect to re-run on every render
@@ -179,18 +179,22 @@ onSuccessRef.current = onSuccess; // Update ref, not dependency
 ### Async operations safety
 
 ```typescript
-const isMountedRef = useRef(true);
-
 useEffect(() => {
-  isMountedRef.current = true;
-  return () => { isMountedRef.current = false; };
-}, []);
+  const abortController = new AbortController();
 
-const fetchData = async () => {
-  const result = await api.getData();
-  if (!isMountedRef.current) return; // Don't update state if unmounted
-  setState(result);
-};
+  const fetchData = async () => {
+    try {
+      const result = await api.getData({ signal: abortController.signal });
+      setState(result);
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return; // Ignore aborted
+      throw e;
+    }
+  };
+
+  fetchData();
+  return () => abortController.abort();
+}, []);
 ```
 
 ---
