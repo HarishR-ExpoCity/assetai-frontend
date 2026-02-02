@@ -240,12 +240,19 @@ export async function getChatHistory(): Promise<ChatApiResult<ChatHistoryRespons
       method: 'GET',
     });
 
-    const responseData = await response.json();
-
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       return {
         success: false,
-        error: responseData.detail || 'Failed to fetch chat history',
+        error: errorData.detail || 'Failed to fetch chat history',
+      };
+    }
+
+    const responseData = await response.json().catch(() => null);
+    if (!responseData) {
+      return {
+        success: false,
+        error: 'Invalid response from server',
       };
     }
 
@@ -268,7 +275,7 @@ export async function getChatHistory(): Promise<ChatApiResult<ChatHistoryRespons
  */
 export async function deleteChat(sessionId: string): Promise<ChatApiResult<void>> {
   try {
-    const response = await authFetch(`${getBaseUrl()}/session/${sessionId}/`, {
+    const response = await authFetch(`${getBaseUrl()}/session/${encodeURIComponent(sessionId)}/`, {
       method: 'DELETE',
     });
 

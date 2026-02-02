@@ -194,18 +194,30 @@ export default function FileManagementPage() {
   };
 
   const handleDownload = async (file: FileItem) => {
-    const result = await getFileDownload(file.file_id);
-    if (result.success && result.data) {
-      const url = URL.createObjectURL(result.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } else {
-      toast.error(result.error || 'Failed to download file');
+    let url: string | null = null;
+    let anchor: HTMLAnchorElement | null = null;
+
+    try {
+      const result = await getFileDownload(file.file_id);
+      if (result.success && result.data) {
+        url = URL.createObjectURL(result.data);
+        anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = file.filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+      } else {
+        toast.error(result.error || 'Failed to download file');
+      }
+    } catch {
+      toast.error('Failed to download file');
+    } finally {
+      if (anchor && document.body.contains(anchor)) {
+        document.body.removeChild(anchor);
+      }
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
     }
   };
 
@@ -228,16 +240,20 @@ export default function FileManagementPage() {
     if (!fileToDelete) return;
 
     setIsDeleting(true);
-    const result = await deleteFile(fileToDelete.file_id);
-    setIsDeleting(false);
-
-    if (result.success) {
-      setFilesList((prev) => prev.filter((f) => f.id !== fileToDelete.id));
-      setIsDeleteDialogOpen(false);
-      setFileToDelete(null);
-      toast.success('File deleted successfully');
-    } else {
-      toast.error(result.error || 'Failed to delete file');
+    try {
+      const result = await deleteFile(fileToDelete.file_id);
+      if (result.success) {
+        setFilesList((prev) => prev.filter((f) => f.id !== fileToDelete.id));
+        setIsDeleteDialogOpen(false);
+        setFileToDelete(null);
+        toast.success('File deleted successfully');
+      } else {
+        toast.error(result.error || 'Failed to delete file');
+      }
+    } catch {
+      toast.error('Failed to delete file');
+    } finally {
+      setIsDeleting(false);
     }
   };
 

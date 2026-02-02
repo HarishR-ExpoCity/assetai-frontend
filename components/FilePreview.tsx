@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import { getFilePreview, getFileDownload, type FileItem } from '@/services/files-api';
+import { toast } from 'sonner';
 
 const LOADING_TIMEOUT_MS = 30000; // 30 seconds timeout
 
@@ -88,25 +89,36 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
       }, LOADING_TIMEOUT_MS);
 
       // Fetch file preview
-      getFilePreview(file.file_id).then(async (result) => {
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-
-        if (result.success && result.data) {
-          if (isPreviewableText(ext)) {
-            const text = await result.data.text();
-            setTextContent(text);
-          } else {
-            const url = URL.createObjectURL(result.data);
-            setBlobUrl(url);
+      getFilePreview(file.file_id, abortControllerRef.current.signal)
+        .then(async (result) => {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
           }
+
+          if (result.success && result.data) {
+            if (isPreviewableText(ext)) {
+              const text = await result.data.text();
+              setTextContent(text);
+            } else {
+              const url = URL.createObjectURL(result.data);
+              setBlobUrl(url);
+            }
+            setIsLoading(false);
+          } else {
+            setError(result.error || 'Failed to load file preview');
+            setIsLoading(false);
+          }
+        })
+        .catch((error) => {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return;
+          }
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
+          setError('Failed to load file preview');
           setIsLoading(false);
-        } else {
-          setError(result.error || 'Failed to load file preview');
-          setIsLoading(false);
-        }
-      });
+        });
     }
 
     return () => {
@@ -135,16 +147,31 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
 
   const handleDownload = async () => {
     if (!file) return;
-    const result = await getFileDownload(file.file_id);
-    if (result.success && result.data) {
-      const url = URL.createObjectURL(result.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+    let url: string | null = null;
+    let anchor: HTMLAnchorElement | null = null;
+
+    try {
+      const result = await getFileDownload(file.file_id);
+      if (result.success && result.data) {
+        url = URL.createObjectURL(result.data);
+        anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = file.filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+      } else {
+        toast.error(result.error || 'Failed to download file');
+      }
+    } catch {
+      toast.error('Failed to download file');
+    } finally {
+      if (anchor && document.body.contains(anchor)) {
+        document.body.removeChild(anchor);
+      }
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
     }
   };
 
@@ -229,7 +256,7 @@ export function FilePreview({ file, isOpen, onClose }: FilePreviewProps) {
           style={{ fontSize: 48 }}
         />
         <p className='text-sm text-gray-500'>
-          Preview not available for {ext.toUpperCase()} files
+          Preview not available for {ext ? `${ext.toUpperCase()} files` : 'this file type'}
         </p>
         <Button onClick={handleDownload} variant='outline'>
           <DownloadRoundedIcon style={{ fontSize: 16 }} className='mr-2' />

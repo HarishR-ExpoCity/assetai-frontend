@@ -152,6 +152,7 @@ export default function ChatWindow({
   );
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const botMessageCreatedRef = useRef(false);
 
   const handleCancelRequest = () => {
     if (abortControllerRef.current) {
@@ -178,9 +179,9 @@ export default function ChatWindow({
   const renderSearchResults = (results: SearchResult[]) => {
     return (
       <div className='flex flex-col dark:bg-[#FFFFFF0D] dark:text-white bg-[#0000000d] chat-bubble rounded-3xl p-2'>
-        {results.map((result) => (
+        {results.map((result, index) => (
           <div
-            key={result.file_id}
+            key={`${result.file_id}-${index}`}
             className='p-4 dark:bg-[#222222] bg-white chat-cluster dark:border-b-[#FFFFFF0D] border-b border-b-[#0000000D]'
           >
             <div className='flex justify-between items-center mb-2'>
@@ -248,7 +249,7 @@ export default function ChatWindow({
     let accumulatedText = '';
     let chatId: number | undefined = undefined;
     let newSessionId: string | null = null;
-    let botMessageCreated = false;
+    botMessageCreatedRef.current = false;
     let contentStarted = false; // Track when content starts arriving to hide loader
     let timeoutId: NodeJS.Timeout | null = null;
     const searchResults: SearchResult[] = [];
@@ -272,7 +273,7 @@ export default function ChatWindow({
 
         if (existingBotMessage) {
           // Update existing bot message
-          botMessageCreated = true;
+          botMessageCreatedRef.current = true;
           return prevMessages.map((msg, idx) =>
             idx > lastUserIndex && msg.sender === 'Bot'
               ? {
@@ -286,7 +287,7 @@ export default function ChatWindow({
         }
 
         // Create new bot message
-        botMessageCreated = true;
+        botMessageCreatedRef.current = true;
         return [
           ...prevMessages,
           {
@@ -371,7 +372,7 @@ export default function ChatWindow({
               const sqlEvent = event as StreamSqlEvent;
               if (sqlEvent.data.file_name) {
                 const result: SearchResult = {
-                  file_id: sqlEvent.data.file_id || searchResults.length + 1,
+                  file_id: sqlEvent.data.file_id || uuidv4(),
                   file_name: sqlEvent.data.file_name,
                   file_path: sqlEvent.data.file_path || '',
                   file_type: sqlEvent.data.file_type || '',
@@ -410,7 +411,7 @@ export default function ChatWindow({
               for (const fileData of vectorData) {
                 if (fileData.file_name) {
                   const result: SearchResult = {
-                    file_id: fileData.file_id || searchResults.length + 1,
+                    file_id: fileData.file_id || uuidv4(),
                     file_name: fileData.file_name,
                     file_path: fileData.file_path || '',
                     file_type: fileData.file_type || '',
@@ -469,7 +470,7 @@ export default function ChatWindow({
         onRefreshHistory?.();
       }
 
-      if (!botMessageCreated && searchResults.length === 0) {
+      if (!botMessageCreatedRef.current && searchResults.length === 0) {
         setMessages((prevMessages) => [
           ...prevMessages,
           {
@@ -589,9 +590,9 @@ export default function ChatWindow({
                           {response.search_results &&
                           response.search_results.length > 0 ? (
                             response.search_results?.map(
-                              (result: SearchResult) => (
+                              (result: SearchResult, resultIndex: number) => (
                                 <div
-                                  key={result.file_id}
+                                  key={`${result.file_id}-${resultIndex}`}
                                   className='p-4 dark:bg-[#222222] bg-white chat-cluster dark:border-b-[#FFFFFF0D] border-b border-b-[#0000000D]'
                                 >
                                   <div className='flex justify-between items-center mb-2'>

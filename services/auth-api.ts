@@ -234,7 +234,9 @@ export async function signup(data: SignupRequest): Promise<ApiResult<SignupRespo
       body: JSON.stringify(data),
     });
 
-    const responseData = await response.json();
+    const responseData = await response.json().catch(() => ({
+      detail: 'Server returned an invalid response',
+    }));
 
     if (!response.ok) {
       return {
@@ -301,7 +303,9 @@ export async function login(data: LoginRequest): Promise<ApiResult<LoginResponse
       body: JSON.stringify(data),
     });
 
-    const responseData = await response.json();
+    const responseData = await response.json().catch(() => ({
+      detail: 'Server returned an invalid response',
+    }));
 
     if (!response.ok) {
       return {

@@ -31,15 +31,32 @@ type FileUploaderProps = {
   maxFiles?: number;
   disabled?: boolean;
   className?: string;
+  supportedFormats?: string;
 };
 
 // ============ Helpers ============
 
+function formatAcceptToList(accept?: Record<string, string[]>): string {
+  if (!accept || Object.keys(accept).length === 0) {
+    return '';
+  }
+
+  const extensions = Object.values(accept)
+    .flat()
+    .map((ext) => ext.replace(/^\./, '').toUpperCase())
+    .filter((ext, index, arr) => arr.indexOf(ext) === index);
+
+  return extensions.join(', ');
+}
+
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes <= 0 || !Number.isFinite(bytes)) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(k)),
+    sizes.length - 1
+  );
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
@@ -69,7 +86,9 @@ export function FileUploader({
   maxFiles = 10,
   disabled = false,
   className,
+  supportedFormats,
 }: FileUploaderProps) {
+  const displayFormats = supportedFormats || formatAcceptToList(accept);
   const onDrop = useCallback(
     (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       if (acceptedFiles.length > 0) {
@@ -140,9 +159,11 @@ export function FileUploader({
             <p className='text-xs text-gray-500 dark:text-gray-400'>
               Max {maxFiles} files, up to {formatFileSize(maxSize)} each
             </p>
-            <p className='text-xs text-gray-400 dark:text-gray-500'>
-              Supported: PDF, DOCX, TXT, CSV
-            </p>
+            {displayFormats && (
+              <p className='text-xs text-gray-400 dark:text-gray-500'>
+                Supported: {displayFormats}
+              </p>
+            )}
           </div>
         </div>
       </div>

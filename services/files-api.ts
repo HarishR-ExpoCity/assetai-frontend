@@ -83,12 +83,19 @@ export async function getFilesList(): Promise<FilesApiResult<FileItem[]>> {
       method: 'GET',
     });
 
-    const responseData = await response.json();
-
     if (!response.ok) {
+      const responseData = await response.json().catch(() => ({}));
       return {
         success: false,
         error: responseData.detail || 'Failed to fetch files',
+      };
+    }
+
+    const responseData = await response.json().catch(() => null);
+    if (!responseData) {
+      return {
+        success: false,
+        error: 'Invalid response from server',
       };
     }
 
@@ -142,10 +149,14 @@ export async function getFileDownload(fileId: string): Promise<FilesApiResult<Bl
  * Get file preview blob by file_id (UUID)
  * Fetches the file content for preview display
  */
-export async function getFilePreview(fileId: string): Promise<FilesApiResult<Blob>> {
+export async function getFilePreview(
+  fileId: string,
+  signal?: AbortSignal
+): Promise<FilesApiResult<Blob>> {
   try {
     const response = await authFetch(`${getBaseUrl()}/files/file/${fileId}?preview=True`, {
       method: 'GET',
+      signal,
     });
 
     if (!response.ok) {
@@ -162,6 +173,9 @@ export async function getFilePreview(fileId: string): Promise<FilesApiResult<Blo
       data: blob,
     };
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw error;
+    }
     console.error('File preview API error:', error);
     return {
       success: false,
