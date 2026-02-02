@@ -13,18 +13,14 @@ export default function ChatPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<
     string | undefined
   >(undefined);
-  const [favoriteStatusChanged, setFavoriteStatusChanged] = useState(false);
   const [refreshHistory, setRefreshHistory] = useState(false);
-  const [initialQuery, setInitialQuery] = useState<string | undefined>(
-    undefined
-  );
 
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/');
+      router.replace('/auth');
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -32,19 +28,14 @@ export default function ChatPage() {
     setSelectedSessionId(sessionId);
   };
 
-  const handleFavoriteStatusChange = useCallback(() => {
-    setFavoriteStatusChanged((prev) => !prev);
-  }, []);
-
   const handleNewChat = useCallback(() => {
     setSelectedSessionId(undefined);
-    setInitialQuery(undefined);
     setRefreshHistory((prev) => !prev);
   }, []);
 
-  const handleFavoriteClick = (query: string) => {
-    setInitialQuery(query);
-  };
+  const handleRefreshHistory = useCallback(() => {
+    setRefreshHistory((prev) => !prev);
+  }, []);
 
   if (isLoading) {
     return (
@@ -68,9 +59,8 @@ export default function ChatPage() {
         >
           <ChatWindow
             selectedSessionId={selectedSessionId}
-            onFavoriteStatusChange={handleFavoriteStatusChange}
             onNewChat={handleNewChat}
-            initialQuery={initialQuery}
+            onRefreshHistory={handleRefreshHistory}
           />
         </div>
         <div
@@ -84,9 +74,7 @@ export default function ChatPage() {
               setChatHistoryCollapsed(!isChatHistoryCollapsed)
             }
             onSelectChat={handleSelectChat}
-            favoriteStatusChanged={favoriteStatusChanged}
             refreshHistory={refreshHistory}
-            onFavoriteClick={handleFavoriteClick}
             selectedSessionId={selectedSessionId}
           />
         </div>

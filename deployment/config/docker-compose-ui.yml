@@ -1,0 +1,9 @@
+services:
+  assetai-ui:
+    image: assetai/ui:${IMAGE_OS_TAG}
+    container_name: assetai-ui
+    restart: always
+    ports:
+      - ${ASSETAI_UI_PORT}:3000
+    environment:
+      NEXT_PUBLIC_ASSETAI_API_BASE_URL: ${ASSETAI_API_BASE_URL}

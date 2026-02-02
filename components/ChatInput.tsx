@@ -20,18 +20,18 @@ import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
-import { useAccessToken } from "@/hooks/useAccessToken";
+
+const FILE_TYPES = ["csv", "txt", "doc", "docx", "pdf", "image"];
 
 interface ChatInputProps {
   onSendMessage: (
     messageContent: string,
-    filters: { project: string; fileType: string; count: string; }
+    filters: { fileType: string }
   ) => void;
   isDisabled: boolean;
-  selectedFile: { fileName: string; fileId: number; filePath: string; } | null;
+  selectedFile: { fileName: string; fileId: number; filePath: string } | null;
   onClearSelectedFile: () => void;
   resetFilters: boolean;
-  initialQuery?: string;
   onTyping: () => void;
 }
 
@@ -41,26 +41,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
   selectedFile,
   onClearSelectedFile,
   resetFilters,
-  initialQuery,
   onTyping,
 }) => {
   const [inputValue, setInputValue] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [projectOptions, setProjectOptions] = useState<string[]>([]);
-  const [fileTypes, setFileTypes] = useState<string[]>([]);
-
-  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { isAuthenticated } = useAccessToken();
-
   // Initial filter state with no filters applied
   const defaultFilters = {
-    project: "",
-    count: "",
     fileType: "",
   };
 
@@ -78,144 +67,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetFilters]);
 
-  useEffect(() => {
-    if (initialQuery) {
-      setInputValue(initialQuery);
-    }
-  }, [initialQuery]);
-
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/suggestions`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-
-          const data = await response.json();
-          if (response.status === 400) {
-            return { error: data.detail };
-          } else if (!response.ok) {
-            throw new Error(
-              `Error fetching the suggestions: ${response.statusText}`
-            );
-          } else if (response.ok) {
-            setSuggestions(data.suggestions || []);
-          }
-        } catch (error) {
-          console.error("Failed to fetch suggestions:", error);
-        }
-      }
-    };
-
-    fetchSuggestions(); // Fetch suggestions on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    const fetchProjects = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/projects`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-          const data = await response.json();
-          if (response.status === 400) {
-            return { error: data.detail };
-          } else if (!response.ok) {
-            throw new Error(
-              `Error fetching the projects: ${response.statusText}`
-            );
-          } else if (response.ok) {
-            const projects = data.project_names || [];
-            setProjectOptions(projects);
-            // if (projects.length > 0) {
-            //     const firstProject = projects[0];
-            //     setTempFilters((prev) => ({ ...prev, project: firstProject }));
-            //     setFilters((prev) => ({ ...prev, project: firstProject })); // Set the first project as default
-            // }
-          }
-        } catch (error) {
-          console.error("Failed to fetch projects:", error);
-        }
-      }
-    };
-
-    fetchProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    const fetchFileTypes = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_AIASSET_API_BASE_URL}/chat/file_types`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-
-          const data = await response.json();
-          if (response.status === 400) {
-            return { error: data.detail };
-          } else if (!response.ok) {
-            throw new Error(
-              `Failed to fetch file types: ${response.statusText}`
-            );
-          } else if (response.ok) {
-            setFileTypes(data.file_types);
-          }
-        } catch (err) {
-          console.error("Error fetching file types:", err);
-        }
-      }
-    };
-    fetchFileTypes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInputValue(value);
-
-    if (value.trim().length > 2) {
-      setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-    }
+    setInputValue(e.target.value);
     onTyping();
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
-    setShowSuggestions(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -223,7 +77,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (inputValue.trim()) {
       onSendMessage(inputValue, filters);
       setInputValue("");
-      setShowSuggestions(false);
     }
   };
 
@@ -257,32 +110,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     <div className="flex flex-col mt-2 space-y-2 relative">
       {/* Filter Selections Display */}
       <div className="flex space-x-1 items-center text-sm ls">
-        {filters.project && (
-          <div className="bg-[#0000000D] dark:bg-stone-600 dark:text-[#FFFFFFD9] px-3 rounded-md flex items-center space-x-2">
-            <span>{filters.project}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleRemoveFilter("project")}
-              className="text-gray-500 dark:text-white px-1 hover:bg-transparent"
-            >
-              <CancelRoundedIcon fontSize="small" />
-            </Button>
-          </div>
-        )}
-        {filters.count && (
-          <div className="bg-[#0000000D] dark:bg-stone-600 dark:text-[#FFFFFFD9] px-3 rounded-md flex items-center space-x-2">
-            <span>Top {filters.count}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleRemoveFilter("count")}
-              className="text-gray-500 dark:text-white px-1 hover:bg-transparent"
-            >
-              <CancelRoundedIcon fontSize="small" />
-            </Button>
-          </div>
-        )}
         {filters.fileType && (
           <div className="bg-[#0000000D] dark:bg-stone-600 dark:text-[#FFFFFFD9] px-3 rounded-md flex items-center space-x-2">
             <span>{filters.fileType}</span>
@@ -336,66 +163,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
             className="p-4 w-auto min-w-52"
           >
             <div className="space-y-4">
-              <div>
-                <Select
-                  onValueChange={(value) =>
-                    handleTempFilterChange("project", value)
-                  }
-                  value={tempFilters.project || undefined}
-                >
-                  <SelectTrigger className="w-full mt-1">
-                    <SelectValue placeholder="Project Name" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projectOptions.map((project) => (
-                      <SelectItem key={project} value={project}>
-                        {project}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Select
-                  onValueChange={(value) =>
-                    handleTempFilterChange("count", value)
-                  }
-                  value={tempFilters.count || undefined}
-                >
-                  <SelectTrigger className="w-full mt-1">
-                    <SelectValue placeholder="Count" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">Top 10</SelectItem>
-                    <SelectItem value="20">Top 20</SelectItem>
-                    <SelectItem value="50">Top 50</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Select
-                  onValueChange={(value) =>
-                    handleTempFilterChange("fileType", value)
-                  }
-                  value={tempFilters.fileType || undefined}
-                >
-                  <SelectTrigger className="w-full mt-1">
-                    <SelectValue placeholder="File Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fileTypes.map((fileType) => (
-                      <SelectItem key={fileType} value={fileType}>
-                        {fileType}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select
+                onValueChange={(value) =>
+                  handleTempFilterChange("fileType", value)
+                }
+                value={tempFilters.fileType || undefined}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="File Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FILE_TYPES.map((fileType) => (
+                    <SelectItem key={fileType} value={fileType}>
+                      {fileType}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <Button
-                className="text-base font-semibold bg-[#0000000D] dark:bg-[#FFFFFF0D] w-full mt-4"
+                className="text-base font-semibold bg-[#0000000D] dark:bg-[#FFFFFF0D] w-full"
                 variant="ghost"
                 onClick={applyFilters}
               >
@@ -405,38 +192,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </PopoverContent>
         </Popover>
 
-        {/* Input and Suggestions */}
+        {/* Input */}
         <div className="relative flex-grow">
           <form onSubmit={handleSubmit} className="flex items-center space-x-2">
-            <div className="relative flex-grow" ref={inputRef}>
-              <Input
-                type="text"
-                placeholder="Type your query..."
-                className="header-tabs flex-grow border-input h-12 dark:text-white dark:border-[#FFFFFF26]"
-                value={inputValue}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyPress}
-                disabled={isDisabled}
-              />
-
-              {/* Suggestions Dropdown Above the Input */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div
-                  ref={suggestionsRef}
-                  className="absolute bottom-full mb-2 z-10 w-full bg-white dark:bg-popover border dark:border-none dark:border-gray-700 rounded-lg shadow-md"
-                >
-                  {suggestions.map((suggestion, index) => (
-                    <div
-                      key={index}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className="text-base font-light px-4 py-2 cursor-pointer text-gray-400 dark:text-white hover:bg-gray-100 dark:hover:bg-[#FFFFFF0D] rounded-md"
-                    >
-                      {suggestion}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Input
+              id="chat-query-input"
+              name="chat-query"
+              type="text"
+              placeholder="Type your query..."
+              className="header-tabs flex-grow border-input h-12 dark:text-white dark:border-[#FFFFFF26]"
+              value={inputValue}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyPress}
+              disabled={isDisabled}
+              ref={inputRef}
+              autoComplete="off"
+            />
 
             <Button
               type="submit"

@@ -1,75 +1,58 @@
-// Simple local authentication - no backend auth required
-// Hardcoded credentials for local/offline deployment
+// JWT-based authentication
+import {
+  getAccessToken,
+  hasStoredTokens,
+  getStoredEmail,
+  clearTokens,
+} from '@/services/auth-api';
 
-export const LOCAL_USERS = [
-  {
-    username: 'admin@assetai.com',
-    password: 'Password@AssetAI',
-    is_admin: true,
-    email: 'admin@assetai.com',
-  },
-];
-
-export const authConfig = {
-  userKey: 'auth_user',
+export type User = {
+  email: string;
 };
 
-export interface User {
-  id: string;
-  username: string;
-  email?: string;
-  is_admin?: boolean;
-}
-
-export interface AuthState {
+export type AuthState = {
   isAuthenticated: boolean;
   user: User | null;
+};
+
+/**
+ * Get user info from stored data
+ * Note: This doesn't validate token - use silentRefresh for validation
+ */
+export function getUserFromToken(): User | null {
+  const token = getAccessToken();
+  if (!token) return null;
+
+  const email = getStoredEmail();
+  if (!email) return null;
+
+  return { email };
 }
 
-export const getStoredAuth = (): AuthState => {
+/**
+ * Get stored auth state from tokens
+ * Note: This doesn't validate tokens - use silentRefresh for validation
+ */
+export function getStoredAuth(): AuthState {
   if (typeof window === 'undefined') {
     return { isAuthenticated: false, user: null };
   }
 
-  const userStr = sessionStorage.getItem(authConfig.userKey);
-
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      return { isAuthenticated: true, user };
-    } catch {
-      return { isAuthenticated: false, user: null };
-    }
+  if (!hasStoredTokens()) {
+    return { isAuthenticated: false, user: null };
   }
 
-  return { isAuthenticated: false, user: null };
-};
-
-export const setStoredAuth = (user: User): void => {
-  sessionStorage.setItem(authConfig.userKey, JSON.stringify(user));
-};
-
-export const clearStoredAuth = (): void => {
-  sessionStorage.removeItem(authConfig.userKey);
-};
-
-// Validate credentials against hardcoded users
-export const validateCredentials = (
-  username: string,
-  password: string,
-): User | null => {
-  const foundUser = LOCAL_USERS.find(
-    (u) => u.username === username && u.password === password,
-  );
-
-  if (foundUser) {
-    return {
-      id: `local-${foundUser.username}`,
-      username: foundUser.username,
-      email: foundUser.email,
-      is_admin: foundUser.is_admin,
-    };
+  const user = getUserFromToken();
+  if (!user) {
+    return { isAuthenticated: false, user: null };
   }
 
-  return null;
-};
+  return { isAuthenticated: true, user };
+}
+
+/**
+ * Clear stored auth
+ */
+export function clearStoredAuth(): void {
+  clearTokens();
+}

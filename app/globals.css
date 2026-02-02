@@ -19,7 +19,11 @@
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-feature-settings: 'liga';
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
 }
 
 /* Set default background colors to prevent flashing */
@@ -30,7 +34,7 @@
 
 .dark {
   color-scheme: dark;
-  --background-color: 17, 24, 39; /* gray-900 */
+  --background-color: 18, 18, 18; /* #121212 - pure gray */
 }
 
 /* Apply background color immediately */
@@ -64,7 +68,9 @@ button[title]::before {
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
+  transition:
+    opacity 0.2s,
+    visibility 0.2s;
   z-index: 10;
   pointer-events: none;
 }
@@ -198,6 +204,31 @@ body {
   );
 }
 
+/* Auth input styling - consistent focus and active states */
+.auth-input {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: transparent;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.auth-input:focus-visible {
+  border-color: #9859ff;
+  box-shadow: 0 0 0 3px rgba(152, 89, 255, 0.15);
+  outline: none;
+  --tw-ring-color: transparent;
+}
+
+:is(.dark .auth-input) {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+:is(.dark .auth-input:focus-visible) {
+  border-color: #9859ff;
+  box-shadow: 0 0 0 3px rgba(152, 89, 255, 0.25);
+}
+
 .btn-border {
   border-bottom: 2px solid;
   border-image-source: linear-gradient(
@@ -306,6 +337,14 @@ body {
 
 .table-row-style:last-child {
   border-bottom: transparent;
+}
+
+.table-row-style.show-border-bottom:last-child {
+  border-bottom: 0.5px solid #00000026;
+}
+
+.dark .table-row-style.show-border-bottom:last-child {
+  border-bottom: 0.5px solid #ffffff1a;
 }
 
 .table-head .table-row-style:first-child {
@@ -443,7 +482,7 @@ body {
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+    --card: 0 0% 10%;
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
