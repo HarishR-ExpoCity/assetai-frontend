@@ -33,6 +33,7 @@ interface ChatInputProps {
   onClearSelectedFile: () => void;
   resetFilters: boolean;
   onTyping: () => void;
+  shouldFocus?: boolean;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -42,11 +43,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onClearSelectedFile,
   resetFilters,
   onTyping,
+  shouldFocus,
 }) => {
   const [inputValue, setInputValue] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [shouldFocus]);
 
   // Initial filter state with no filters applied
   const defaultFilters = {

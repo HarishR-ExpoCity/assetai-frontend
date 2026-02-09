@@ -29,6 +29,7 @@ type ChatHistoryProps = {
   isCollapsed: boolean;
   onToggleSidebar: () => void;
   onSelectChat: (sessionId: string) => void;
+  onDeleteChat?: (sessionId: string) => void;
   refreshHistory: boolean;
   selectedSessionId?: string;
 };
@@ -42,6 +43,7 @@ export default function ChatHistory({
   isCollapsed,
   onToggleSidebar,
   onSelectChat,
+  onDeleteChat,
   refreshHistory,
   selectedSessionId,
 }: ChatHistoryProps) {
@@ -50,7 +52,9 @@ export default function ChatHistory({
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   // Delete confirmation dialog state
-  const [chatToDelete, setChatToDelete] = useState<ChatHistoryItem | null>(null);
+  const [chatToDelete, setChatToDelete] = useState<ChatHistoryItem | null>(
+    null,
+  );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const { isAuthenticated } = useAccessToken();
@@ -95,13 +99,16 @@ export default function ChatHistory({
     onSelectChat(sessionId);
   };
 
-  const handleDeleteClick = useCallback((sessionId: string) => {
-    const chat = chatHistory.find((c) => c.session_id === sessionId);
-    if (chat) {
-      setChatToDelete(chat);
-      setIsDeleteDialogOpen(true);
-    }
-  }, [chatHistory]);
+  const handleDeleteClick = useCallback(
+    (sessionId: string) => {
+      const chat = chatHistory.find((c) => c.session_id === sessionId);
+      if (chat) {
+        setChatToDelete(chat);
+        setIsDeleteDialogOpen(true);
+      }
+    },
+    [chatHistory],
+  );
 
   const confirmDelete = useCallback(async () => {
     if (!chatToDelete || !isAuthenticated) return;
@@ -111,6 +118,9 @@ export default function ChatHistory({
 
       if (result.success) {
         fetchChatHistory();
+        if (chatToDelete.session_id === selectedSessionId) {
+          onDeleteChat?.(chatToDelete.session_id);
+        }
         toast.success('Chat deleted successfully');
       } else {
         toast.error(result.error || 'Failed to delete chat');
@@ -122,7 +132,13 @@ export default function ChatHistory({
       setChatToDelete(null);
       setIsDeleteDialogOpen(false);
     }
-  }, [chatToDelete, isAuthenticated, fetchChatHistory]);
+  }, [
+    chatToDelete,
+    isAuthenticated,
+    fetchChatHistory,
+    selectedSessionId,
+    onDeleteChat,
+  ]);
 
   const cancelDelete = useCallback(() => {
     setChatToDelete(null);
@@ -185,7 +201,7 @@ export default function ChatHistory({
 
   return (
     <div
-      className={`card-shadow rounded-xl p-3 h-[calc(100vh-130px)] flex flex-col transition-all duration-300 dark:border-[#FFFFFF26]`}
+      className={`card-shadow rounded-xl p-4 h-[calc(100vh-130px)] flex flex-col transition-all duration-300 dark:border-[#FFFFFF26]`}
     >
       {isCollapsed ? (
         <div className='flex flex-col items-center justify-between h-full py-2'>
@@ -289,7 +305,9 @@ export default function ChatHistory({
             </DialogTitle>
             <DialogDescription className='text-[#000000D9] dark:text-[#FFFFFFD9] text-base font-light'>
               This will delete{' '}
-              <span className='font-semibold'>{chatToDelete?.search_query}</span>
+              <span className='font-semibold'>
+                {chatToDelete?.search_query}
+              </span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className='sm:justify-end'>

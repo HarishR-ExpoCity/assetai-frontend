@@ -30,11 +30,14 @@ export default function ChatPage() {
 
   const handleNewChat = useCallback(() => {
     setSelectedSessionId(undefined);
-    setRefreshHistory((prev) => !prev);
   }, []);
 
   const handleRefreshHistory = useCallback(() => {
     setRefreshHistory((prev) => !prev);
+  }, []);
+
+  const handleDeleteChat = useCallback(() => {
+    setSelectedSessionId(undefined);
   }, []);
 
   if (isLoading) {
@@ -74,6 +77,7 @@ export default function ChatPage() {
               setChatHistoryCollapsed(!isChatHistoryCollapsed)
             }
             onSelectChat={handleSelectChat}
+            onDeleteChat={handleDeleteChat}
             refreshHistory={refreshHistory}
             selectedSessionId={selectedSessionId}
           />

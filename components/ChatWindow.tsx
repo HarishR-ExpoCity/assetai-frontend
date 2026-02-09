@@ -114,6 +114,7 @@ export default function ChatWindow({
   // Commented out - file selection feature disabled for now
   // const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
   const [filterResetTrigger, setFilterResetTrigger] = useState(false);
+  const [focusTrigger, setFocusTrigger] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -134,7 +135,7 @@ export default function ChatWindow({
   const DotLoader = () => (
     <div className='flex items-center gap-2 my-1 mx-2'>
       <div
-        className='w-5 h-5 border-2 border-[#1C1B1F] dark:border-[#39C2F7] rounded-full animate-spin'
+        className='w-5 h-5 border-2 border-[#5836F5] rounded-full animate-spin'
         style={{ borderTopColor: 'transparent' }}
       />
       <span className='text-sm text-[#000000] dark:text-[#FFFFFF]'>
@@ -184,7 +185,7 @@ export default function ChatWindow({
             key={`${result.file_id}-${index}`}
             className='p-4 dark:bg-[#222222] bg-white chat-cluster dark:border-b-[#FFFFFF0D] border-b border-b-[#0000000D]'
           >
-            <div className='flex justify-between items-center mb-2'>
+            <div className='flex justify-between items-center'>
               <div className='flex-1 min-w-0 mr-4 text-xs font-semibold tracking-[0.025em] break-all whitespace-pre-wrap'>
                 {result.file_name}
               </div>
@@ -517,6 +518,7 @@ export default function ChatWindow({
     setChatSessionId(null); // Clear API session for new conversation
     setSelectedFile(null);
     setFilterResetTrigger((prev) => !prev);
+    setFocusTrigger((prev) => !prev);
     onNewChat();
   };
 
@@ -595,7 +597,7 @@ export default function ChatWindow({
                                   key={`${result.file_id}-${resultIndex}`}
                                   className='p-4 dark:bg-[#222222] bg-white chat-cluster dark:border-b-[#FFFFFF0D] border-b border-b-[#0000000D]'
                                 >
-                                  <div className='flex justify-between items-center mb-2'>
+                                  <div className='flex justify-between items-center'>
                                     <div className='flex-1 min-w-0 mr-4 text-xs font-semibold tracking-[0.025em] break-all whitespace-pre-wrap'>
                                       {result.file_name}
                                     </div>
@@ -719,7 +721,6 @@ export default function ChatWindow({
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
-
                                       </div>
                                     </div>
                                   </div>
@@ -854,7 +855,10 @@ export default function ChatWindow({
           ...(currentSessionId && { session_id: currentSessionId }),
           ...(filters.fileType && { file_type: filters.fileType }),
         };
-        const result = await sendChatMessageStream(chatPayload, abortController.signal);
+        const result = await sendChatMessageStream(
+          chatPayload,
+          abortController.signal,
+        );
 
         if (result.success && result.reader) {
           await processStreamResponse(result.reader);
@@ -920,7 +924,7 @@ export default function ChatWindow({
   return (
     <div className='card-shadow rounded-xl p-4 h-[calc(100vh-130px)] flex flex-col dark:border-[#FFFFFF26]'>
       <div className='flex justify-between items-center mb-2'>
-        <h2 className='text-base font-semibold'>Chat Window</h2>
+        <h2 className='text-sm font-semibold'>Chat Window</h2>
         <Button
           variant='ghost'
           size='sm'
@@ -1035,6 +1039,7 @@ export default function ChatWindow({
         onClearSelectedFile={handleClearSelectedFile}
         resetFilters={filterResetTrigger}
         onTyping={scrollToBottom}
+        shouldFocus={focusTrigger}
       />
     </div>
   );
